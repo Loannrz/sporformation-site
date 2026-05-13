@@ -67,7 +67,15 @@ do $$ begin
   create type sanction_status as enum ('active','retired');
 exception when duplicate_object then null; end $$;
 do $$ begin
-  create type sanction_type as enum ('retard','absence','comportement','autre');
+  create type sanction_type as enum (
+    'avertissement',
+    'punition',
+    'sanction',
+    'retard',
+    'absence',
+    'comportement',
+    'autre'
+  );
 exception when duplicate_object then null; end $$;
 
 create table if not exists public.sanctions (

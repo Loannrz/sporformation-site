@@ -63,22 +63,14 @@ export function hasPermission(user: SessionUser | null, key: PermissionKey) {
   return professorAllows[key] === true;
 }
 
+/** Fiche élève : tous les signalements lorsque l’utilisateur peut consulter les sanctions (plus de filtre « actives seules » pour les professeurs). */
 export function sanctionsForStudentProfile(
   user: SessionUser | null,
-  studentClassId: string,
+  _studentClassId: string,
   sanctions: Sanction[],
 ): Sanction[] {
-  if (!user) return [];
-  if (user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR") {
-    return sanctions;
-  }
-  if (
-    user.role === "PROF_PRINCIPAL" &&
-    user.principalClassIds?.includes(studentClassId)
-  ) {
-    return sanctions;
-  }
-  return sanctions.filter((s) => s.status === "active");
+  if (!user || !hasPermission(user, "VIEW_SANCTIONS")) return [];
+  return sanctions;
 }
 
 export function canRemoveSanction(

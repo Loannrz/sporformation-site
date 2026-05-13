@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SANCTION_FORM_TYPES_ORDER } from "@/lib/discipline-types";
 import type { SanctionType } from "@/types";
 import { addSanctionAction } from "@/app/actions/sanctions";
 import type { AppLocale } from "@/i18n/routing";
@@ -12,13 +13,6 @@ type Props = {
   studentId: string;
   locale: AppLocale;
 };
-
-const TYPES: SanctionType[] = [
-  "retard",
-  "absence",
-  "comportement",
-  "autre",
-];
 
 export function AddSanctionForm({ studentId, locale }: Props) {
   const t = useTranslations("sanctions");
@@ -40,9 +34,9 @@ export function AddSanctionForm({ studentId, locale }: Props) {
           id="stype"
           name="type"
           className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
-          defaultValue="retard"
+          defaultValue="avertissement"
         >
-          {TYPES.map((ty) => (
+          {SANCTION_FORM_TYPES_ORDER.map((ty: SanctionType) => (
             <option key={ty} value={ty}>
               {tTypes(ty)}
             </option>

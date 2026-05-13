@@ -106,6 +106,17 @@ async function supabaseOrNull() {
   return createServerSupabase();
 }
 
+/**
+ * Personnel connecté / intranet — préfère `service_role` si disponible (évite liste vide lorsque les RLS
+ * filtrent trop fort), sinon client session.
+ */
+async function staffReadSupabase(): Promise<SupabaseClient | null> {
+  const user = await getSessionUser();
+  if (!user) return null;
+  const admin = createAdminSupabase();
+  return admin ?? (await supabaseOrNull());
+}
+
 function profileName(
   map: Map<string, { first_name: string; last_name: string }>,
   id: string | null,
@@ -290,9 +301,133 @@ async function buildClassesWithStudentsFromClient(
 }
 
 export async function fetchClassesWithStudents(): Promise<SchoolClass[]> {
-  const supabase = await supabaseOrNull();
+  const supabase = await staffReadSupabase();
   if (!supabase) return [];
   return buildClassesWithStudentsFromClient(supabase);
+}
+
+/** Données pour le raccourci « Avertissement » (sélecteurs élève / classe). */
+export type DisciplineDialogOptions = {
+  classes: { id: string; name: string }[];
+  students: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    classId: string | null;
+    className: string | null;
+  }[];
+};
+
+export async function fetchDisciplineDialogOptions(): Promise<DisciplineDialogOptions> {
+  const supabase = await staffReadSupabase();
+  if (!supabase) return { classes: [], students: [] };
+
+  const classRows = await loadAllClassRows(supabase);
+  const nameByClassId = new Map(classRows.map((c) => [c.id, c.name]));
+
+  for (const sel of STUDENT_SELECT_TRIES) {
+    const { data, error } = await supabase
+      .from("students")
+      .select(sel)
+      .order("last_name");
+    if (!error && data) {
+      const students = (data as { id: string; class_id: string | null }[]).map(
+        (r) => {
+          const row = r as {
+            id: string;
+            first_name: string;
+            last_name: string;
+            class_id: string | null;
+          };
+          const cid = row.class_id;
+          return {
+            id: row.id,
+            firstName: row.first_name,
+            lastName: row.last_name,
+            classId: cid,
+            className: cid ? (nameByClassId.get(cid) ?? null) : null,
+          };
+        },
+      );
+      return {
+        classes: classRows.map((c) => ({ id: c.id, name: c.name })),
+        students,
+      };
+    }
+  }
+
+  return {
+    classes: classRows.map((c) => ({ id: c.id, name: c.name })),
+    students: [],
+  };
+}
+
+/** Carte liste classes : données alignées lecture staff (voir `staffReadSupabase`). */
+export type StaffClassCard = SchoolClass & {
+  principalDisplay: string | null;
+  /** Sanctions encore actives dans la classe. */
+  activeSanctionsCount: number;
+};
+
+export async function fetchStaffClassesOverview(): Promise<StaffClassCard[]> {
+  const supabase = await staffReadSupabase();
+  if (!supabase) return [];
+  const classes = await buildClassesWithStudentsFromClient(supabase);
+  const principalIds = classes
+    .map((c) => c.principalId)
+    .filter(Boolean) as string[];
+  const pmap =
+    principalIds.length > 0
+      ? await loadProfileMap(principalIds, supabase)
+      : new Map<
+          string,
+          { first_name: string; last_name: string }
+        >();
+
+  const principalDisplay = (pid?: string): string | null => {
+    if (!pid) return null;
+    const p = pmap.get(pid);
+    if (!p) return null;
+    return `${p.first_name} ${p.last_name}`.trim() || null;
+  };
+
+  const allStudentIds = [...new Set(classes.flatMap((c) => c.studentIds))];
+  const totalBySid = new Map<string, number>();
+  if (allStudentIds.length) {
+    const { data: sanctionRows } = await supabase
+      .from("sanctions")
+      .select("student_id")
+      .eq("status", "active")
+      .in("student_id", allStudentIds);
+    for (const row of sanctionRows ?? []) {
+      const sid = row.student_id as string;
+      totalBySid.set(sid, (totalBySid.get(sid) ?? 0) + 1);
+    }
+  }
+
+  return classes.map((c) => ({
+    ...c,
+    principalDisplay: principalDisplay(c.principalId),
+    activeSanctionsCount: c.studentIds.reduce(
+      (acc, sid) => acc + (totalBySid.get(sid) ?? 0),
+      0,
+    ),
+  }));
+}
+
+export async function countActiveSanctionsForStudents(
+  studentIds: string[],
+): Promise<number> {
+  if (studentIds.length === 0) return 0;
+  const supabase = await staffReadSupabase();
+  if (!supabase) return 0;
+  const { count, error } = await supabase
+    .from("sanctions")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "active")
+    .in("student_id", studentIds);
+  if (error || count == null) return 0;
+  return count;
 }
 
 /** Liste classes + effectifs : préfère le client service role (contourne RLS) si configuré. */
@@ -307,14 +442,30 @@ export async function fetchClassesWithStudentsForAdmin(): Promise<SchoolClass[]>
 export async function fetchClassById(
   id: string,
 ): Promise<SchoolClass | null> {
-  const all = await fetchClassesWithStudents();
-  return all.find((c) => c.id === id) ?? null;
+  const supabase = await staffReadSupabase();
+  if (!supabase) return null;
+  const row = await loadClassRowById(supabase, id);
+  if (!row) return null;
+  const { data: studs, error } = await supabase
+    .from("students")
+    .select("id")
+    .eq("class_id", id);
+  const studentIds = !error && studs ? studs.map((s) => s.id as string) : [];
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? null,
+    academicYearStart: row.academic_year_start ?? null,
+    academicYearEnd: row.academic_year_end ?? null,
+    principalId: row.principal_id ?? undefined,
+    studentIds,
+  };
 }
 
 export async function fetchStudentsForClass(
   classId: string,
 ): Promise<StudentProfile[]> {
-  const supabase = await supabaseOrNull();
+  const supabase = await staffReadSupabase();
   if (!supabase) return [];
   return fetchStudentsForClassFromClient(supabase, classId);
 }
@@ -442,7 +593,7 @@ export function mapStudentRow(row: {
 export async function fetchStudentById(
   id: string,
 ): Promise<StudentProfile | null> {
-  const supabase = await supabaseOrNull();
+  const supabase = await staffReadSupabase();
   if (!supabase) return null;
   for (const sel of STUDENT_SELECT_TRIES) {
     const { data, error } = await supabase
@@ -460,7 +611,7 @@ export async function fetchStudentById(
 export async function fetchProfileById(
   id: string,
 ): Promise<{ firstName: string; lastName: string } | null> {
-  const supabase = await supabaseOrNull();
+  const supabase = await staffReadSupabase();
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("profiles")
@@ -473,8 +624,9 @@ export async function fetchProfileById(
 
 async function loadProfileMap(
   ids: (string | null)[],
+  client?: SupabaseClient | null,
 ): Promise<Map<string, { first_name: string; last_name: string }>> {
-  const supabase = await supabaseOrNull();
+  const supabase = client ?? (await supabaseOrNull());
   const map = new Map<string, { first_name: string; last_name: string }>();
   const clean = [...new Set(ids.filter(Boolean) as string[])];
   if (!supabase || clean.length === 0) return map;
@@ -491,9 +643,10 @@ async function loadProfileMap(
 
 async function loadAttachmentsForSanctions(
   sanctionIds: string[],
+  client?: SupabaseClient | null,
 ): Promise<Map<string, SanctionAttachment[]>> {
   const result = new Map<string, SanctionAttachment[]>();
-  const supabase = await supabaseOrNull();
+  const supabase = client ?? (await supabaseOrNull());
   if (!supabase || sanctionIds.length === 0) return result;
   const { data, error } = await supabase
     .from("sanction_attachments")
@@ -578,7 +731,7 @@ export async function fetchSanRawById(id: string): Promise<{
 export async function fetchSanctionsForStudent(
   studentId: string,
 ): Promise<Sanction[]> {
-  const supabase = await supabaseOrNull();
+  const supabase = await staffReadSupabase();
   if (!supabase) return [];
   const { data: rows, error } = await supabase
     .from("sanctions")
@@ -591,8 +744,9 @@ export async function fetchSanctionsForStudent(
   const ids = rows.map((r) => r.id);
   const profileMap = await loadProfileMap(
     rows.flatMap((r) => [r.author_id, r.retired_by]),
+    supabase,
   );
-  const attMap = await loadAttachmentsForSanctions(ids);
+  const attMap = await loadAttachmentsForSanctions(ids, supabase);
   return rows.map((r) =>
     mapSanctionDbToApp(r, profileMap, attMap.get(r.id) ?? []),
   );
@@ -651,7 +805,7 @@ export async function fetchSanctionsForClassStudents(
   previewLimit: number,
 ): Promise<Sanction[]> {
   if (studentIds.length === 0) return [];
-  const supabase = await supabaseOrNull();
+  const supabase = await staffReadSupabase();
   if (!supabase) return [];
   const { data: rows, error } = await supabase
     .from("sanctions")
@@ -665,8 +819,9 @@ export async function fetchSanctionsForClassStudents(
   const ids = rows.map((r) => r.id);
   const profileMap = await loadProfileMap(
     rows.flatMap((r) => [r.author_id, r.retired_by]),
+    supabase,
   );
-  const attMap = await loadAttachmentsForSanctions(ids);
+  const attMap = await loadAttachmentsForSanctions(ids, supabase);
   return rows.map((r) =>
     mapSanctionDbToApp(r, profileMap, attMap.get(r.id) ?? []),
   );

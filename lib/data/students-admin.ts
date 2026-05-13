@@ -18,10 +18,15 @@ export type StudentAdminListItem = {
   sex: string | null;
   birthPlace: string | null;
   age: number | null;
+  photoUrl: string | null;
 };
 
 export type StudentAdminDetail = StudentAdminListItem & {
   entryDate: string | null;
+  principalDisplayName: string | null;
+  sanctionsTotal: number;
+  sanctionsActive: number;
+  sanctionsRetard: number;
 };
 
 function ageFromBirthDate(iso: string | null): number | null {
@@ -40,6 +45,7 @@ type StudentRowDb = {
   first_name: string;
   last_name: string;
   email: string | null;
+  photo_url?: string | null;
   class_id: string | null;
   birth_date?: string | null;
   sex?: string | null;
@@ -62,6 +68,7 @@ function mapListRow(
     sex: (r.sex as string | null | undefined) ?? null,
     birthPlace: (r.birth_place as string | null | undefined) ?? null,
     age: ageFromBirthDate(birth),
+    photoUrl: (r.photo_url as string | null | undefined) ?? null,
   };
 }
 
@@ -102,6 +109,31 @@ export async function fetchAllStudentsForAdmin(): Promise<
 
 type StudentDetailRowDb = StudentRowDb & { entry_date?: string | null };
 
+async function loadSanctionStatsForStudent(
+  session: SupabaseClient,
+  studentId: string,
+): Promise<{
+  total: number;
+  active: number;
+  retard: number;
+}> {
+  const base = () =>
+    session.from("sanctions").select("*", { count: "exact", head: true });
+
+  const [{ count: total }, { count: active }, { count: retard }] =
+    await Promise.all([
+      base().eq("student_id", studentId),
+      base().eq("student_id", studentId).eq("status", "active"),
+      base().eq("student_id", studentId).eq("type", "retard"),
+    ]);
+
+  return {
+    total: total ?? 0,
+    active: active ?? 0,
+    retard: retard ?? 0,
+  };
+}
+
 export async function fetchStudentAdminDetail(
   studentId: string,
 ): Promise<StudentAdminDetail | null> {
@@ -126,17 +158,38 @@ export async function fetchStudentAdminDetail(
   if (!row) return null;
 
   let className: string | null = null;
+  let principalDisplayName: string | null = null;
+
   if (row.class_id) {
     const { data: cls } = await session
       .from("classes")
-      .select("name")
+      .select("name,principal_id")
       .eq("id", row.class_id)
       .maybeSingle();
     className = cls?.name ?? null;
+    const principalId = cls?.principal_id as string | null | undefined;
+    if (principalId) {
+      const { data: prof } = await session
+        .from("profiles")
+        .select("first_name,last_name")
+        .eq("id", principalId)
+        .maybeSingle();
+      if (prof) {
+        principalDisplayName =
+          `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim() ||
+          null;
+      }
+    }
   }
+
+  const sanctionStats = await loadSanctionStatsForStudent(session, studentId);
 
   return {
     ...mapListRow(row, className),
     entryDate: (row.entry_date as string | null | undefined) ?? null,
+    principalDisplayName,
+    sanctionsTotal: sanctionStats.total,
+    sanctionsActive: sanctionStats.active,
+    sanctionsRetard: sanctionStats.retard,
   };
 }

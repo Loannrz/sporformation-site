@@ -4,6 +4,19 @@ import {
   createPersonalCalendarEventAction,
   deleteCalendarEventAction,
 } from "@/app/actions/calendar-events";
+import { CalendarEventDetailDialog } from "@/components/calendar/calendar-event-detail-dialog";
+import {
+  addDaySafe,
+  addMonthSafe,
+  addWeekSafe,
+  formatCalendarRangeLine,
+} from "@/components/calendar/calendar-date-utils";
+import {
+  CalendarMonthGrid,
+  CalendarNav,
+  CalendarSingleDayEvents,
+  CalendarWeekColumns,
+} from "@/components/calendar/calendar-visual-views";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,9 +46,16 @@ import {
 import type { CalendarEvent } from "@/types";
 import type { AppLocale } from "@/i18n/routing";
 import { useRouter } from "@/i18n/navigation";
-import { useFormatter, useTranslations } from "next-intl";
+import { endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
+import { enUS, fr as frFns } from "date-fns/locale";
+import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
-import { useId, useMemo, useState, useTransition } from "react";
+import {
+  useId,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -48,6 +68,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 type Filter = "all" | "mine" | "shared";
+
+type ViewTab = "month" | "week" | "day";
 
 type Props = {
   locale: AppLocale;
@@ -63,9 +85,12 @@ export function CalendarPageClient({
   canManageSchool,
   events,
 }: Props) {
+  const dateLocale = useMemo(
+    () => (locale === "fr" ? frFns : enUS),
+    [locale],
+  );
   const t = useTranslations("calendar");
   const router = useRouter();
-  const formatter = useFormatter();
   const formId = useId();
   const [filter, setFilter] = useState<Filter>("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -75,6 +100,10 @@ export function CalendarPageClient({
   const [endsAt, setEndsAt] = useState("");
   const [pending, startTransition] = useTransition();
   const [deleteTarget, setDeleteTarget] = useState<CalendarEvent | null>(null);
+  const [calendarTab, setCalendarTab] = useState<ViewTab>("month");
+  const [cursorDate, setCursorDate] = useState(() => new Date());
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
 
   const filtered = useMemo(() => {
     switch (filter) {
@@ -86,6 +115,30 @@ export function CalendarPageClient({
         return events;
     }
   }, [events, filter]);
+
+  const upcomingPreview = useMemo(() => {
+    const nowMs = Date.now();
+    return [...filtered]
+      .filter((e) => new Date(e.end).getTime() >= nowMs)
+      .sort(
+        (a, b) =>
+          new Date(a.start).getTime() - new Date(b.start).getTime(),
+      )
+      .slice(0, 3);
+  }, [filtered]);
+
+  const navLabel = useMemo(() => {
+    const wk = { weekStartsOn: 1 as const };
+    if (calendarTab === "month") {
+      return format(cursorDate, "MMMM yyyy", { locale: dateLocale });
+    }
+    if (calendarTab === "week") {
+      const s = startOfWeek(cursorDate, wk);
+      const e = endOfWeek(cursorDate, wk);
+      return `${format(s, "d MMM", { locale: dateLocale })} — ${format(e, "d MMM yyyy", { locale: dateLocale })}`;
+    }
+    return format(cursorDate, "EEEE d MMMM yyyy", { locale: dateLocale });
+  }, [calendarTab, cursorDate, dateLocale]);
 
   const resetPersonalForm = () => {
     setTitle("");
@@ -106,6 +159,18 @@ export function CalendarPageClient({
       if (!res.ok) {
         if (res.error === "NO_SERVICE_ROLE") {
           toast.error(t("toastNoService"));
+          return;
+        }
+        if (res.error === "DATES_REQUIRED") {
+          toast.error(t("datesRequiredToast"));
+          return;
+        }
+        if (res.error === "DATES_INVALID") {
+          toast.error(t("toastDatesInvalid"));
+          return;
+        }
+        if (res.error === "RANGE_INVALID") {
+          toast.error(t("toastDatesOrder"));
           return;
         }
         toast.error(t("toastPersonalFailed"));
@@ -136,6 +201,97 @@ export function CalendarPageClient({
     if (ev.personal) return ev.createdBy === userId;
     return canManageSchool;
   };
+
+  const navPrev = () => {
+    if (calendarTab === "month") {
+      setCursorDate((d) => addMonthSafe(d, -1));
+    } else if (calendarTab === "week") {
+      setCursorDate((d) => addWeekSafe(d, -1));
+    } else {
+      setCursorDate((d) => addDaySafe(d, -1));
+    }
+  };
+
+  const navNext = () => {
+    if (calendarTab === "month") {
+      setCursorDate((d) => addMonthSafe(d, 1));
+    } else if (calendarTab === "week") {
+      setCursorDate((d) => addWeekSafe(d, 1));
+    } else {
+      setCursorDate((d) => addDaySafe(d, 1));
+    }
+  };
+
+  const openEventDetail = (ev: CalendarEvent) => {
+    setDetailEvent(ev);
+    setDetailOpen(true);
+  };
+
+  const anchorMonth = startOfMonth(cursorDate);
+  const weekAnchor = startOfWeek(cursorDate, { weekStartsOn: 1 });
+
+  const renderMini = (ev: CalendarEvent) => (
+    <article
+      key={ev.id}
+      role="button"
+      tabIndex={0}
+      onClick={() => openEventDetail(ev)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openEventDetail(ev);
+        }
+      }}
+      className={
+        ev.personal
+          ? "cursor-pointer rounded-xl border border-dashed border-border bg-muted/20 p-4 outline-none transition hover:bg-muted/30"
+          : "cursor-pointer rounded-xl border-l-4 border-l-primary bg-card p-4 shadow-sm outline-none transition hover:bg-muted/20"
+      }
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={ev.personal ? "secondary" : "default"}>
+              {ev.personal ? t("badgePersonal") : t("badgeSchool")}
+            </Badge>
+            <span className="text-xs uppercase text-muted-foreground">
+              {t(`kind.${ev.type}`)}
+            </span>
+          </div>
+          <p className="font-semibold leading-snug">{ev.title}</p>
+          <p className="text-xs text-muted-foreground">
+            {formatCalendarRangeLine(locale, ev.start, ev.end)}
+          </p>
+          {ev.description ? (
+            <p className="line-clamp-2 text-sm text-muted-foreground">
+              {ev.description}
+            </p>
+          ) : null}
+          {!ev.personal && ev.audience ? (
+            <p className="text-[11px] text-muted-foreground">
+              {t("schoolAudience")}
+              {": "}
+              {t(`aud.${ev.audience}`)}
+            </p>
+          ) : null}
+        </div>
+        {canDelete(ev) ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(ev);
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+          </Button>
+        ) : null}
+      </div>
+    </article>
+  );
 
   return (
     <>
@@ -168,85 +324,70 @@ export function CalendarPageClient({
         </Button>
       </div>
 
-      <Card>
+      <Card className="mt-6">
         <CardHeader>
           <CardTitle>{t("listTitle")}</CardTitle>
           <CardDescription>{t("listDesc")}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {filtered.map((ev) => (
-            <article
-              key={ev.id}
-              className={
-                ev.personal
-                  ? "rounded-xl border border-dashed border-border bg-muted/20 p-4"
-                  : "rounded-xl border-l-4 border-l-primary bg-card p-4 shadow-sm"
-              }
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={ev.personal ? "secondary" : "default"}>
-                      {ev.personal ? t("badgePersonal") : t("badgeSchool")}
-                    </Badge>
-                    <span className="text-xs uppercase text-muted-foreground">
-                      {t(`kind.${ev.type}`)}
-                    </span>
-                  </div>
-                  <p className="font-semibold leading-snug">{ev.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatter.dateTime(new Date(ev.start), {
-                      weekday: "long",
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                    {" — "}
-                    {formatter.dateTime(new Date(ev.end), {
-                      timeStyle: "short",
-                    })}
-                  </p>
-                  {ev.description ? (
-                    <p className="text-sm text-muted-foreground">{ev.description}</p>
-                  ) : null}
-                  {!ev.personal && ev.audience ? (
-                    <p className="text-[11px] text-muted-foreground">
-                      {t("schoolAudience")}
-                      {": "}
-                      {t(`aud.${ev.audience}`)}
-                    </p>
-                  ) : null}
-                </div>
-                {canDelete(ev) ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-destructive"
-                    onClick={() => setDeleteTarget(ev)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                  </Button>
-                ) : null}
-              </div>
-            </article>
-          ))}
-          {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("emptyList")}</p>
-          ) : null}
+        <CardContent className="space-y-4">
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {t("previewUpcoming")}
+            </h3>
+            <div className="space-y-3">
+              {upcomingPreview.map(renderMini)}
+            </div>
+          </section>
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="month" className="mt-10">
+      <Tabs
+        value={calendarTab}
+        onValueChange={(v) => setCalendarTab(v as ViewTab)}
+        className="mt-10"
+      >
         <TabsList>
           <TabsTrigger value="month">{t("monthly")}</TabsTrigger>
           <TabsTrigger value="week">{t("weekly")}</TabsTrigger>
           <TabsTrigger value="day">{t("daily")}</TabsTrigger>
         </TabsList>
-        {(["month", "week", "day"] as const).map((v) => (
-          <TabsContent key={v} value={v} className="mt-6">
-            <CalendarGridPlaceholder label={t("placeholderGrid", { view: v })} />
-          </TabsContent>
-        ))}
+
+        <TabsContent value="month" className="mt-6">
+          <CalendarNav label={navLabel} onPrev={navPrev} onNext={navNext} />
+          <CalendarMonthGrid
+            anchorMonth={anchorMonth}
+            events={filtered}
+            locale={dateLocale}
+            dense
+            selectedDay={cursorDate}
+            onSelectDay={(day) => {
+              setCursorDate(day);
+              setCalendarTab("day");
+            }}
+            onSelectEvent={openEventDetail}
+          />
+        </TabsContent>
+
+        <TabsContent value="week" className="mt-6">
+          <CalendarNav label={navLabel} onPrev={navPrev} onNext={navNext} />
+          <CalendarWeekColumns
+            weekAnchor={weekAnchor}
+            events={filtered}
+            locale={dateLocale}
+            onSelectEvent={openEventDetail}
+          />
+        </TabsContent>
+
+        <TabsContent value="day" className="mt-6">
+          <CalendarNav label={navLabel} onPrev={navPrev} onNext={navNext} />
+          <CalendarSingleDayEvents
+            day={cursorDate}
+            events={filtered}
+            locale={dateLocale}
+            emptyLabel={t("emptyDay")}
+            onSelectEvent={openEventDetail}
+          />
+        </TabsContent>
       </Tabs>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -317,6 +458,18 @@ export function CalendarPageClient({
         </DialogContent>
       </Dialog>
 
+      <CalendarEventDetailDialog
+        locale={locale}
+        userId={userId}
+        canManageSchool={canManageSchool}
+        event={detailEvent}
+        open={detailOpen && !!detailEvent}
+        onOpenChange={(open) => {
+          setDetailOpen(open);
+          if (!open) setDetailEvent(null);
+        }}
+      />
+
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -340,13 +493,5 @@ export function CalendarPageClient({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-function CalendarGridPlaceholder({ label }: { label: string }) {
-  return (
-    <div className="grid h-[360px] place-items-center rounded-2xl border border-dashed border-border bg-muted/15 px-6 text-center text-sm text-muted-foreground">
-      {label}
-    </div>
   );
 }

@@ -40,8 +40,12 @@ export function SchoolCalendarCreateForm(props: {
   teachers: TeacherOpt[];
   classes: ClassOpt[];
   students: StudentOpt[];
+  /** Formulaire sans carte (ex. dialogue) */
+  embedded?: boolean;
+  /** Après publication réussie (fermer le dialogue côté parent, etc.) */
+  onPublished?: () => void;
 }) {
-  const { locale, teachers, classes, students } = props;
+  const { locale, teachers, classes, students, embedded, onPublished } = props;
   const t = useTranslations("admin.calendarSchool");
   const router = useRouter();
   const uid = useId();
@@ -87,6 +91,14 @@ export function SchoolCalendarCreateForm(props: {
           toast.error(t("toastNoService"));
           return;
         }
+        if (res.error === "DATES_REQUIRED") {
+          toast.error(t("toastDatesRequired"));
+          return;
+        }
+        if (res.error === "DATES_INVALID") {
+          toast.error(t("toastDatesInvalid"));
+          return;
+        }
         if (res.error === "TARGETS_REQUIRED") {
           toast.error(t("toastTargetsRequired"));
           return;
@@ -95,10 +107,15 @@ export function SchoolCalendarCreateForm(props: {
           toast.error(t("toastDatesOrder"));
           return;
         }
+        if (res.error === "TARGETS_FAILED") {
+          toast.error(t("toastTargetsPersistFailed"));
+          return;
+        }
         toast.error(t("toastFailed"));
         return;
       }
       toast.success(t("toastSaved"));
+      onPublished?.();
       setTitle("");
       setDescription("");
       setStartsAt("");
@@ -112,14 +129,8 @@ export function SchoolCalendarCreateForm(props: {
 
   const specific = audience === "SPECIFIC_TARGETS";
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("formTitle")}</CardTitle>
-        <CardDescription>{t("formDesc")}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={onSubmit} className="space-y-6">
+  const innerForm = (
+    <form onSubmit={onSubmit} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor={`scf-t-${uid}`}>{t("titleLbl")}</Label>
             <Input
@@ -298,11 +309,23 @@ export function SchoolCalendarCreateForm(props: {
             </div>
           ) : null}
 
-          <Button type="submit" disabled={pending || !title.trim()}>
-            {pending ? t("submitting") : t("submit")}
-          </Button>
-        </form>
-      </CardContent>
+      <Button type="submit" disabled={pending || !title.trim()}>
+        {pending ? t("submitting") : t("submit")}
+      </Button>
+    </form>
+  );
+
+  if (embedded) {
+    return innerForm;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("formTitle")}</CardTitle>
+        <CardDescription>{t("formDesc")}</CardDescription>
+      </CardHeader>
+      <CardContent>{innerForm}</CardContent>
     </Card>
   );
 }

@@ -5,6 +5,7 @@ import { canDownloadSanctionPdf } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
 import { SanctionOfficialPdf } from "@/lib/pdf/sanction-official";
 import type { AppLocale } from "@/i18n/routing";
+import { sanctionTypeLabel } from "@/lib/sanction-labels";
 
 export const runtime = "nodejs";
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       studentFirst={student.firstName}
       studentLast={student.lastName}
       classNameLabel={cls?.name ?? "—"}
-      sanctionTypeLabel={sanction.type}
+      sanctionTypeLabel={sanctionTypeLabel(sanction.type, locale)}
       dateLabel={new Date(sanction.date).toLocaleString(
         locale === "fr" ? "fr-FR" : "en-US",
       )}

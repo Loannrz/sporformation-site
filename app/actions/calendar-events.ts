@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppLocale } from "@/i18n/routing";
 import { hasPermission } from "@/lib/permissions";
 import { isStaffAdmin } from "@/lib/roles";
 import { getSessionUser } from "@/lib/session-server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { createServerSupabase } from "@/lib/supabase/server";
 import type { CalendarEventType } from "@/types";
 
 const UUID_RE =
@@ -43,6 +45,49 @@ function parseAudience(
     : "ALL_STAFF";
 }
 
+/** Écriture préférée avec la clé service_role ; sinon session cookie (Politiques « staff » RLS suffisantes en local sans service_role). */
+async function calendarWriteClientPreferAdmin(): Promise<SupabaseClient | null> {
+  return createAdminSupabase() ?? (await createServerSupabase());
+}
+
+/**
+ * Détecte l'erreur PostgREST (cache schéma, colonnes absentes…) pour retenter un insert sans
+ * personal / audience / description. Ex. : « Could not find the 'audience' column … in the schema cache »
+ * ne matche pas « column … audience » car l'ordre des mots diffère.
+ */
+function shouldRetryCalendarInsertWithoutAudienceFields(
+  msg: string | undefined,
+): boolean {
+  if (!msg) return false;
+  if (/could not find.*\b(audience|personal)\b.*\bcolumn\b/i.test(msg))
+    return true;
+  if (/schema cache/i.test(msg) && /\b(audience|personal)\b/i.test(msg))
+    return true;
+  if (/column .*personal/i.test(msg) || /column .*audience/i.test(msg))
+    return true;
+  if (/pgrst/i.test(msg) && /\b(audience|personal)\b/i.test(msg))
+    return true;
+  return false;
+}
+
+async function insertPersonalCalendarWithRetries(
+  client: SupabaseClient,
+  row: Record<string, unknown>,
+  legacyMinimal: Record<string, unknown>,
+): Promise<Error | null> {
+  let { error } = await client.from("calendar_events").insert(row);
+  if (error?.message?.toLowerCase().includes("description")) {
+    const { description: _omit, ...noDesc } = row as Record<string, unknown>;
+    ({ error } = await client.from("calendar_events").insert(noDesc));
+  }
+
+  if (error && shouldRetryCalendarInsertWithoutAudienceFields(error.message)) {
+    ({ error } = await client.from("calendar_events").insert(legacyMinimal));
+  }
+
+  return error;
+}
+
 export async function createPersonalCalendarEventAction(
   locale: AppLocale,
   input: {
@@ -58,9 +103,8 @@ export async function createPersonalCalendarEventAction(
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
 
-  const admin = createAdminSupabase();
-  if (!admin) {
-    return { ok: false as const, error: "NO_SERVICE_ROLE" as const };
+  if (!input.startsAt.trim() || !input.endsAt.trim()) {
+    return { ok: false as const, error: "DATES_REQUIRED" as const };
   }
 
   const title = input.title.trim();
@@ -75,11 +119,18 @@ export async function createPersonalCalendarEventAction(
     return { ok: false as const, error: "RANGE_INVALID" as const };
   }
 
+  const client = await calendarWriteClientPreferAdmin();
+  if (!client) {
+    return { ok: false as const, error: "NO_SERVICE_ROLE" as const };
+  }
+
+  const kind = parseKind(input.kind ?? "school_event");
+
   const insertRow: Record<string, unknown> = {
     title,
     starts_at: start.toISOString(),
     ends_at: end.toISOString(),
-    kind: parseKind(input.kind ?? "school_event"),
+    kind,
     personal: true,
     audience: null,
     description: input.description?.trim() || null,
@@ -88,19 +139,21 @@ export async function createPersonalCalendarEventAction(
     teacher_id: null,
   };
 
-  let { error } = await admin.from("calendar_events").insert(insertRow);
-  if (error && /column personal|column audience/i.test(error.message ?? "")) {
-    const legacy = {
-      title,
-      starts_at: start.toISOString(),
-      ends_at: end.toISOString(),
-      kind: parseKind(input.kind ?? "school_event"),
-      created_by: user.id,
-      class_id: null as string | null,
-      teacher_id: null as string | null,
-    };
-    ({ error } = await admin.from("calendar_events").insert(legacy));
-  }
+  const legacy = {
+    title,
+    starts_at: start.toISOString(),
+    ends_at: end.toISOString(),
+    kind,
+    created_by: user.id,
+    class_id: null as string | null,
+    teacher_id: null as string | null,
+  };
+
+  const error = await insertPersonalCalendarWithRetries(
+    client,
+    insertRow,
+    legacy,
+  );
 
   if (error) {
     console.error("personal calendar insert", error.message);
@@ -128,6 +181,10 @@ export async function createSchoolCalendarEventAction(
   const user = await getSessionUser();
   if (!user || !isStaffAdmin(user)) {
     return { ok: false as const, error: "FORBIDDEN" as const };
+  }
+
+  if (!input.startsAt.trim() || !input.endsAt.trim()) {
+    return { ok: false as const, error: "DATES_REQUIRED" as const };
   }
 
   const admin = createAdminSupabase();
@@ -184,10 +241,19 @@ export async function createSchoolCalendarEventAction(
   let error = ins.error;
   let rowId = ins.data?.id as string | undefined;
 
+  if (error && /description/i.test(error.message ?? "")) {
+    const { description: _d, ...rowNoDesc } = insertRow;
+    ins = await admin
+      .from("calendar_events")
+      .insert(rowNoDesc)
+      .select("id")
+      .maybeSingle();
+    error = ins.error;
+    rowId = ins.data?.id as string | undefined;
+  }
+
   const missingNewCols =
-    error &&
-    (/column .*personal/i.test(error.message ?? "") ||
-      /column .*audience/i.test(error.message ?? ""));
+    error && shouldRetryCalendarInsertWithoutAudienceFields(error.message);
 
   if (missingNewCols) {
     const legacyClassId =
@@ -257,6 +323,106 @@ export async function createSchoolCalendarEventAction(
   return { ok: true as const };
 }
 
+export async function updateCalendarEventAction(
+  locale: AppLocale,
+  eventId: string,
+  input: {
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    description?: string;
+    kind?: string;
+  },
+) {
+  const user = await getSessionUser();
+  const id = eventId.trim();
+  if (!user || !UUID_RE.test(id)) {
+    return { ok: false as const, error: "FORBIDDEN" as const };
+  }
+
+  if (!input.startsAt.trim() || !input.endsAt.trim()) {
+    return { ok: false as const, error: "DATES_REQUIRED" as const };
+  }
+
+  const db = await calendarWriteClientPreferAdmin();
+  if (!db) {
+    return { ok: false as const, error: "NO_SERVICE_ROLE" as const };
+  }
+
+  const sel = await db
+    .from("calendar_events")
+    .select("id,personal,created_by")
+    .eq("id", id)
+    .maybeSingle();
+
+  type PickRow = { personal: boolean | null; created_by: string | null };
+
+  let row = sel.data as PickRow | null;
+  let perr = sel.error;
+  if (perr?.message?.includes("personal")) {
+    const fb = await db
+      .from("calendar_events")
+      .select("id,created_by")
+      .eq("id", id)
+      .maybeSingle();
+    row = fb.data
+      ? {
+          personal: false,
+          created_by: (fb.data as { created_by: string | null }).created_by,
+        }
+      : null;
+    perr = fb.error as typeof perr;
+  }
+
+  if (perr || !row) {
+    return { ok: false as const, error: "NOT_FOUND" as const };
+  }
+
+  const isPersonal = !!row.personal;
+  const isOwner = row.created_by === user.id;
+  const canEditSchool = !isPersonal && isStaffAdmin(user);
+  if (!((isPersonal && isOwner) || canEditSchool)) {
+    return { ok: false as const, error: "FORBIDDEN" as const };
+  }
+
+  const title = input.title.trim();
+  if (!title) return { ok: false as const, error: "TITLE_REQUIRED" as const };
+
+  const start = new Date(input.startsAt);
+  const end = new Date(input.endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return { ok: false as const, error: "DATES_INVALID" as const };
+  }
+  if (end.getTime() < start.getTime()) {
+    return { ok: false as const, error: "RANGE_INVALID" as const };
+  }
+
+  const patch: Record<string, unknown> = {
+    title,
+    starts_at: start.toISOString(),
+    ends_at: end.toISOString(),
+    kind: parseKind(input.kind ?? "school_event"),
+  };
+  if (input.description !== undefined) {
+    patch.description = input.description.trim() || null;
+  }
+
+  let { error: uerr } = await db.from("calendar_events").update(patch).eq("id", id);
+
+  if (uerr && /description/i.test(uerr.message ?? "")) {
+    const { description: _x, ...p2 } = patch;
+    ({ error: uerr } = await db.from("calendar_events").update(p2).eq("id", id));
+  }
+
+  if (uerr) {
+    console.error("calendar update", uerr.message);
+    return { ok: false as const, error: "UPDATE_FAILED" as const };
+  }
+
+  revalidateCalendarViews(locale);
+  return { ok: true as const };
+}
+
 export async function deleteCalendarEventAction(
   locale: AppLocale,
   eventId: string,
@@ -267,12 +433,12 @@ export async function deleteCalendarEventAction(
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
 
-  const admin = createAdminSupabase();
-  if (!admin) {
+  const db = await calendarWriteClientPreferAdmin();
+  if (!db) {
     return { ok: false as const, error: "NO_SERVICE_ROLE" as const };
   }
 
-  const sel = await admin
+  const sel = await db
     .from("calendar_events")
     .select("id,personal,created_by")
     .eq("id", id)
@@ -287,7 +453,7 @@ export async function deleteCalendarEventAction(
   let permError = sel.error;
 
   if (permError?.message?.includes("personal")) {
-    const fb = await admin
+    const fb = await db
       .from("calendar_events")
       .select("id,created_by")
       .eq("id", id)
@@ -309,8 +475,8 @@ export async function deleteCalendarEventAction(
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
 
-  await admin.from("calendar_event_targets").delete().eq("event_id", id);
-  const { error } = await admin.from("calendar_events").delete().eq("id", id);
+  await db.from("calendar_event_targets").delete().eq("event_id", id);
+  const { error } = await db.from("calendar_events").delete().eq("id", id);
   if (error) {
     return { ok: false as const, error: "DELETE_FAILED" as const };
   }

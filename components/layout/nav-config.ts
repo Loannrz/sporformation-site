@@ -9,56 +9,72 @@ import {
   Users,
   CalendarDays,
   Shield,
+  AlertTriangle,
+  type LucideIcon,
 } from "lucide-react";
 
-export type NavItem = {
-  href: string;
-  /** Clé sous le namespace nav des fichiers de traduction. */
-  labelKey:
-    | "dashboard"
-    | "announcements"
-    | "cloud"
-    | "messaging"
-    | "classes"
-    | "calendar"
-    | "admin";
-  icon: typeof LayoutDashboard;
-  /** Si défini, exige la permission ; sinon visible pour tout le monde connecté. */
-  permission?: Parameters<typeof hasPermission>[1];
-  /** Réservé à direction + administrateurs (entrée du hub admin). */
-  staffAdminOnly?: boolean;
-};
+export type NavLabelKey =
+  | "dashboard"
+  | "announcements"
+  | "cloud"
+  | "messaging"
+  | "classes"
+  | "calendar"
+  | "warnings"
+  | "admin";
+
+export type NavItem =
+  | {
+      kind: "link";
+      href: string;
+      labelKey: NavLabelKey;
+      icon: LucideIcon;
+      permission?: Parameters<typeof hasPermission>[1];
+      staffAdminOnly?: boolean;
+    }
+  | {
+      kind: "discipline-dialog";
+      labelKey: "warnings";
+      icon: typeof AlertTriangle;
+      permission: "ADD_SANCTION";
+    };
 
 export function buildNavItems(user: SessionUser | null): NavItem[] {
   const items: NavItem[] = [
     {
+      kind: "link",
       href: "/dashboard",
       labelKey: "dashboard",
       icon: LayoutDashboard,
     },
     {
+      kind: "link",
       href: "/annonces",
       labelKey: "announcements",
       icon: Megaphone,
     },
     {
+      kind: "link",
       href: "/cloud",
       labelKey: "cloud",
       icon: Cloud,
       permission: "UPLOAD_FILES",
     },
     {
+      kind: "link",
       href: "/messagerie",
       labelKey: "messaging",
       icon: MessageSquare,
       permission: "SEND_MESSAGES",
     },
     {
+      kind: "link",
       href: "/classes",
       labelKey: "classes",
       icon: Users,
     },
     {
+      kind: "link",
       href: "/calendrier",
       labelKey: "calendar",
       icon: CalendarDays,
@@ -66,8 +82,18 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
     },
   ];
 
+  if (user && hasPermission(user, "ADD_SANCTION")) {
+    items.push({
+      kind: "discipline-dialog",
+      labelKey: "warnings",
+      icon: AlertTriangle,
+      permission: "ADD_SANCTION",
+    });
+  }
+
   if (user && isStaffAdmin(user)) {
     items.push({
+      kind: "link",
       href: "/admin",
       labelKey: "admin",
       icon: Shield,
@@ -77,7 +103,7 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
 
   return items.filter((item) => {
     if (!user) return false;
-    if (item.staffAdminOnly) return isStaffAdmin(user);
+    if (item.kind === "link" && item.staffAdminOnly) return isStaffAdmin(user);
     if (item.permission) return hasPermission(user, item.permission);
     return true;
   });

@@ -134,7 +134,9 @@ export function CommandPalette({ user, open, onOpenChange }: Props) {
           heading={tCommon("commandMenuGroupMain")}
           className={groupHeading}
         >
-          {items.map((item) => {
+          {items
+            .filter((item): item is Extract<typeof item, { kind: "link" }> => item.kind === "link")
+            .map((item) => {
             const Icon = item.icon;
             return (
               <Command.Item

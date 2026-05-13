@@ -52,7 +52,14 @@ export interface StudentProfile {
   birthPlace?: string | null;
 }
 
-export type SanctionType = "retard" | "absence" | "comportement" | "autre";
+export type SanctionType =
+  | "avertissement"
+  | "punition"
+  | "sanction"
+  | "retard"
+  | "absence"
+  | "comportement"
+  | "autre";
 
 export type SanctionStatus = "active" | "retired";
 

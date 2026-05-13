@@ -5,6 +5,8 @@ import type { AppLocale } from "@/i18n/routing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session-server";
 import { redirect } from "@/i18n/navigation";
+import { hasPermission } from "@/lib/permissions";
+import { fetchDisciplineDialogOptions } from "@/lib/data/school";
 
 export default async function DashboardGroupLayout({
   children,
@@ -15,8 +17,14 @@ export default async function DashboardGroupLayout({
 }) {
   const user = await getSessionUser();
   if (user) {
+    const disciplineOptions = hasPermission(user, "ADD_SANCTION")
+      ? await fetchDisciplineDialogOptions()
+      : null;
+
     return (
-      <DashboardShell user={user}>{children}</DashboardShell>
+      <DashboardShell user={user} disciplineOptions={disciplineOptions}>
+        {children}
+      </DashboardShell>
     );
   }
 

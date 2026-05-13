@@ -1,6 +1,9 @@
-import { SchoolCalendarCreateForm } from "@/components/admin/school-calendar-create-form";
+import { AdminCalendarPlannerClient } from "@/components/admin/admin-calendar-planner-client";
 import { AdminBackLink } from "@/components/admin/admin-back-link";
-import { fetchStudentsMinimalForCalendar } from "@/lib/data/calendar";
+import {
+  fetchSchoolSharedEventsForPlanner,
+  fetchStudentsMinimalForCalendar,
+} from "@/lib/data/calendar";
 import {
   fetchAdminClassOptions,
   formatCloudClassDisplayName,
@@ -33,10 +36,11 @@ export default async function AdminCalendarPage({
     namespace: "admin.calendarSchool",
   });
 
-  const [staff, classesRaw, studentOpts] = await Promise.all([
+  const [staff, classesRaw, studentOpts, sharedEvents] = await Promise.all([
     fetchAllStaffForAdmin(),
     fetchAdminClassOptions(),
     fetchStudentsMinimalForCalendar(),
+    fetchSchoolSharedEventsForPlanner(user),
   ]);
 
   const teachers = staff.map((s) => ({
@@ -62,8 +66,10 @@ export default async function AdminCalendarPage({
         <p className="mt-2 text-muted-foreground">{tPage("pageSubtitle")}</p>
       </div>
 
-      <SchoolCalendarCreateForm
+      <AdminCalendarPlannerClient
         locale={params.locale}
+        userId={user.id}
+        sharedEvents={sharedEvents}
         teachers={teachers}
         classes={classes}
         students={studentOpts}

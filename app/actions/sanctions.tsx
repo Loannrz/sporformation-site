@@ -2,32 +2,43 @@
 
 import { revalidatePath } from "next/cache";
 import { renderToBuffer } from "@react-pdf/renderer";
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { fetchStudentById, fetchClassById } from "@/lib/data/school";
 import { canRemoveSanction, hasPermission } from "@/lib/permissions";
-import { emailSanctionPdfToDirector } from "@/lib/email/sanction";
+import {
+  emailDisciplineClassBatchToDirector,
+  emailSanctionPdfToDirector,
+} from "@/lib/email/sanction";
 import { SanctionOfficialPdf } from "@/lib/pdf/sanction-official";
 import type { AppLocale } from "@/i18n/routing";
 import { getSessionUser } from "@/lib/session-server";
-import type { SanctionType } from "@/types";
+import type { SanctionType, SessionUser } from "@/types";
+import { sanctionTypeLabel } from "@/lib/sanction-labels";
 
-export async function addSanctionAction(formData: FormData) {
-  const user = await getSessionUser();
-  if (!user || !hasPermission(user, "ADD_SANCTION")) {
-    throw new Error("Unauthorized");
-  }
+async function supabasePreferServiceRole() {
+  return createAdminSupabase() ?? (await createServerSupabase());
+}
 
-  const studentId = String(formData.get("studentId") ?? "");
-  const locale = (formData.get("locale") as AppLocale | null) ?? "fr";
-  const type = String(formData.get("type") ?? "autre") as SanctionType;
-  const description = String(formData.get("description") ?? "").trim();
-
+async function applySingleStudentDiscipline(
+  user: SessionUser,
+  studentId: string,
+  type: SanctionType,
+  description: string,
+  locale: AppLocale,
+) {
   const student = await fetchStudentById(studentId);
-  if (!student || !description) {
-    throw new Error("Invalid payload");
+  const descTrim = description.trim();
+  if (!student) {
+    throw new Error(
+      "Student not found — check RLS/service role or the student identifier.",
+    );
+  }
+  if (!descTrim) {
+    throw new Error("Description is required");
   }
 
-  const supabase = await createServerSupabase();
+  const supabase = await supabasePreferServiceRole();
   if (!supabase) {
     throw new Error("Supabase not configured");
   }
@@ -37,7 +48,7 @@ export async function addSanctionAction(formData: FormData) {
     .insert({
       student_id: studentId,
       type,
-      description,
+      description: descTrim,
       author_id: user.id,
       status: "active",
     })
@@ -54,6 +65,7 @@ export async function addSanctionAction(formData: FormData) {
 
   const authorName = `${user.firstName} ${user.lastName}`;
   const pdfLocale: "fr" | "en" = locale === "en" ? "en" : "fr";
+  const typeLabel = sanctionTypeLabel(type, pdfLocale);
   const pdfBuffer = await renderToBuffer(
     <SanctionOfficialPdf
       locale={pdfLocale}
@@ -61,11 +73,11 @@ export async function addSanctionAction(formData: FormData) {
       studentFirst={student.firstName}
       studentLast={student.lastName}
       classNameLabel={cls?.name ?? "—"}
-      sanctionTypeLabel={type}
+      sanctionTypeLabel={typeLabel}
       dateLabel={new Date(inserted.occurred_at).toLocaleString(
         pdfLocale === "fr" ? "fr-FR" : "en-US",
       )}
-      description={description}
+      description={descTrim}
       authorName={authorName}
     />,
   );
@@ -83,13 +95,114 @@ export async function addSanctionAction(formData: FormData) {
   revalidatePath(`/${locale}/dashboard`);
 }
 
+export async function addSanctionAction(formData: FormData) {
+  const user = await getSessionUser();
+  if (!user || !hasPermission(user, "ADD_SANCTION")) {
+    throw new Error("Unauthorized");
+  }
+
+  const studentId = String(formData.get("studentId") ?? "");
+  const locale = (formData.get("locale") as AppLocale | null) ?? "fr";
+  const type = String(formData.get("type") ?? "autre") as SanctionType;
+  const description = String(formData.get("description") ?? "").trim();
+
+  await applySingleStudentDiscipline(user, studentId, type, description, locale);
+}
+
+/** Raccourci sidebar : un élève ou toute une classe (une ligne `sanctions` par élève). */
+export async function addDisciplineReportsAction(formData: FormData) {
+  const user = await getSessionUser();
+  if (!user || !hasPermission(user, "ADD_SANCTION")) {
+    throw new Error("Unauthorized");
+  }
+
+  const locale = (formData.get("locale") as AppLocale | null) ?? "fr";
+  const type = String(formData.get("type") ?? "autre") as SanctionType;
+  const description = String(formData.get("description") ?? "").trim();
+  const scope = String(formData.get("scope") ?? "student");
+
+  if (!description) {
+    throw new Error("Invalid payload");
+  }
+
+  if (scope === "student") {
+    const studentId = String(formData.get("studentId") ?? "");
+    await applySingleStudentDiscipline(user, studentId, type, description, locale);
+    return;
+  }
+
+  if (scope === "class") {
+    const classId = String(formData.get("classId") ?? "");
+    const clazz = await fetchClassById(classId);
+    if (!clazz) {
+      throw new Error("Classe inconnue");
+    }
+    const studentIds = clazz.studentIds;
+    if (studentIds.length === 0) {
+      throw new Error("Aucun élève dans cette classe");
+    }
+
+    const supabase = await supabasePreferServiceRole();
+    if (!supabase) {
+      throw new Error("Supabase not configured");
+    }
+
+    const rows = studentIds.map((student_id) => ({
+      student_id,
+      type,
+      description,
+      author_id: user.id,
+      status: "active" as const,
+    }));
+
+    const { error: insertErr } = await supabase.from("sanctions").insert(rows);
+    if (insertErr) {
+      throw new Error(insertErr.message);
+    }
+
+    const pdfLocale: "fr" | "en" = locale === "en" ? "en" : "fr";
+    const typeLabel = sanctionTypeLabel(type, pdfLocale);
+
+    const { data: students } = await supabase
+      .from("students")
+      .select("id,first_name,last_name")
+      .in("id", studentIds);
+    const names =
+      students
+        ?.map((s) =>
+          `${String(s.first_name ?? "")} ${String(s.last_name ?? "")}`.trim(),
+        )
+        .filter(Boolean) ?? [];
+
+    await emailDisciplineClassBatchToDirector({
+      className: clazz.name,
+      count: studentIds.length,
+      typeLabel,
+      description,
+      studentNames:
+        names.length > 0
+          ? names
+          : studentIds.map((id) => `Élève ${id.slice(0, 8)}…`),
+    });
+
+    revalidatePath(`/${locale}/classes/${classId}`);
+    revalidatePath(`/${locale}/dashboard`);
+    for (const sid of studentIds) {
+      revalidatePath(`/${locale}/etudiants/${sid}`);
+    }
+    return;
+  }
+
+  throw new Error("Invalid scope");
+}
+
 export async function retireSanctionAction(formData: FormData) {
   const user = await getSessionUser();
   const sanctionId = String(formData.get("sanctionId") ?? "");
   const studentId = String(formData.get("studentId") ?? "");
   const locale = (formData.get("locale") as AppLocale | null) ?? "fr";
 
-  const supabase = await createServerSupabase();
+  const supabase = await supabasePreferServiceRole();
   if (!supabase) {
     throw new Error("Supabase not configured");
   }
@@ -114,7 +227,8 @@ export async function retireSanctionAction(formData: FormData) {
     description: "",
     authorId: "",
     authorName: "",
-    status: row.status === "retired" ? ("retired" as const) : ("active" as const),
+    status:
+      row.status === "retired" ? ("retired" as const) : ("active" as const),
     attachments: [],
   };
 

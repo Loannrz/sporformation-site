@@ -8,6 +8,8 @@ import { Menu, X } from "lucide-react";
 import type { SessionUser } from "@/types";
 import { buildNavItems } from "@/components/layout/nav-config";
 import { SporformationLogo } from "@/components/logo/sporformation-logo";
+import { DisciplineQuickDialog } from "@/components/discipline/discipline-quick-dialog";
+import type { DisciplineDialogOptions } from "@/lib/data/school";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -22,9 +24,15 @@ type Props = {
   user: SessionUser;
   /** Ex. messages non lus — brancher sur une source temps réel plus tard. */
   notificationCount?: number;
+  /** Données pour la modale « Avertissement » (null si non chargé). */
+  disciplineOptions: DisciplineDialogOptions | null;
 };
 
-export function AppSidebar({ user, notificationCount = 0 }: Props) {
+export function AppSidebar({
+  user,
+  notificationCount = 0,
+  disciplineOptions,
+}: Props) {
   const t = useTranslations("nav");
   const pathname = usePathname();
   const items = buildNavItems(user);
@@ -89,12 +97,26 @@ export function AppSidebar({ user, notificationCount = 0 }: Props) {
   const NavInner = ({ iconOnly }: { iconOnly: boolean }) => (
     <nav className="flex flex-1 flex-col gap-1 p-3">
       {items.map((item) => {
+        if (item.kind === "discipline-dialog") {
+          if (!disciplineOptions) return null;
+          return (
+            <DisciplineQuickDialog
+              key="discipline-dialog"
+              options={disciplineOptions}
+              iconOnly={iconOnly}
+              linkCls={linkCls}
+              onMobileNavDismiss={() => setDrawerOpen(false)}
+            />
+          );
+        }
+
+        const href = item.href;
         const active =
-          pathname === item.href || pathname.startsWith(`${item.href}/`);
+          pathname === href || pathname.startsWith(`${href}/`);
         const Icon = item.icon;
         const label = t(item.labelKey);
         const badge =
-          item.href === "/messagerie" && notificationCount > 0 ? (
+          href === "/messagerie" && notificationCount > 0 ? (
             <span
               className={cn(
                 "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground",
@@ -107,8 +129,8 @@ export function AppSidebar({ user, notificationCount = 0 }: Props) {
 
         const linkBody = (
           <Link
-            key={item.href}
-            href={item.href}
+            key={href}
+            href={href}
             onClick={() => setDrawerOpen(false)}
             className={linkCls(active, iconOnly)}
           >
@@ -131,7 +153,7 @@ export function AppSidebar({ user, notificationCount = 0 }: Props) {
 
         if (iconOnly) {
           return (
-            <Tooltip key={item.href} delayDuration={300}>
+            <Tooltip key={href} delayDuration={300}>
               <TooltipTrigger asChild>{linkBody}</TooltipTrigger>
               <TooltipContent side="right">{label}</TooltipContent>
             </Tooltip>

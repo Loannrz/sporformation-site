@@ -5,11 +5,10 @@ import type { StudentAdminDetail } from "@/lib/data/students-admin";
 import { adminClassOptionLabel } from "@/lib/academic-year-display";
 import type { AdminClassOption } from "@/lib/data/school";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AppLocale } from "@/i18n/routing";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useEffect, useState, useTransition, type FormEvent } from "react";
@@ -18,12 +17,14 @@ type Props = {
   locale: AppLocale;
   initial: StudentAdminDetail;
   classOptions: AdminClassOption[];
+  onSaved?: () => void;
 };
 
 export function StudentAdminDetailForm({
   locale,
   initial,
   classOptions,
+  onSaved,
 }: Props) {
   const router = useRouter();
   const t = useTranslations("admin.students");
@@ -86,123 +87,110 @@ export function StudentAdminDetailForm({
         return;
       }
       toast.success(t("savedToast"));
+      onSaved?.();
       router.refresh();
     });
   };
 
   return (
-    <div className="space-y-8">
-      <form onSubmit={onSave} className="space-y-6">
-        <div className="grid gap-4 sm:max-w-2xl">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="st-fn">{t("firstNameLabel")} *</Label>
-              <Input
-                id="st-fn"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="st-ln">{t("lastNameLabel")} *</Label>
-              <Input
-                id="st-ln"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                required
-              />
-            </div>
-          </div>
+    <form onSubmit={onSave} className="space-y-6">
+      <div className="grid gap-4 sm:max-w-2xl">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="st-em">{t("emailLabel")}</Label>
+            <Label htmlFor="st-fn">{t("firstNameLabel")} *</Label>
             <Input
-              id="st-em"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="st-fn"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="st-cl">{t("classLabel")}</Label>
-            <select
-              id="st-cl"
-              value={classId}
-              onChange={(e) => setClassId(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">{t("classNone")}</option>
-              {classOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {adminClassOptionLabel(c)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="st-bd">{t("birthDateLabel")}</Label>
-              <Input
-                id="st-bd"
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="st-sx">{t("sexLabel")}</Label>
-              <select
-                id="st-sx"
-                value={sex}
-                onChange={(e) => setSex(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">{t("sexUnset")}</option>
-                <option value="M">{t("sexM")}</option>
-                <option value="F">{t("sexF")}</option>
-                <option value="X">{t("sexX")}</option>
-              </select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="st-bp">{t("birthPlaceLabel")}</Label>
+            <Label htmlFor="st-ln">{t("lastNameLabel")} *</Label>
             <Input
-              id="st-bp"
-              value={birthPlace}
-              onChange={(e) => setBirthPlace(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="st-ed">{t("entryDateLabel")}</Label>
-            <Input
-              id="st-ed"
-              type="date"
-              value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
+              id="st-ln"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required
             />
           </div>
         </div>
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <Button type="submit" disabled={pending}>
-          {pending ? t("saving") : t("save")}
-        </Button>
-      </form>
-
-      <Card className="border-dashed">
-        <CardHeader>
-          <CardTitle className="text-base">{t("sanctionsTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>{t("sanctionsLater")}</p>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link href={`/etudiants/${initial.id}`}>{t("sanctionsOpenProfile")}</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+        <div className="space-y-2">
+          <Label htmlFor="st-em">{t("emailLabel")}</Label>
+          <Input
+            id="st-em"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="st-cl">{t("classLabel")}</Label>
+          <select
+            id="st-cl"
+            value={classId}
+            onChange={(e) => setClassId(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">{t("classNone")}</option>
+            {classOptions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {adminClassOptionLabel(c)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="st-bd">{t("birthDateLabel")}</Label>
+            <Input
+              id="st-bd"
+              type="date"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="st-sx">{t("sexLabel")}</Label>
+            <select
+              id="st-sx"
+              value={sex}
+              onChange={(e) => setSex(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">{t("sexUnset")}</option>
+              <option value="M">{t("sexM")}</option>
+              <option value="F">{t("sexF")}</option>
+              <option value="X">{t("sexX")}</option>
+            </select>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="st-bp">{t("birthPlaceLabel")}</Label>
+          <Input
+            id="st-bp"
+            value={birthPlace}
+            onChange={(e) => setBirthPlace(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="st-ed">{t("entryDateLabel")}</Label>
+          <Input
+            id="st-ed"
+            type="date"
+            value={entryDate}
+            onChange={(e) => setEntryDate(e.target.value)}
+          />
+        </div>
+      </div>
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <Button type="submit" disabled={pending}>
+        {pending ? t("saving") : t("save")}
+      </Button>
+    </form>
   );
 }

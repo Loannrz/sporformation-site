@@ -15,6 +15,7 @@ import {
   fetchSanctionsForStudent,
   fetchStudentById,
 } from "@/lib/data/school";
+import { sanctionTypeLabel } from "@/lib/sanction-labels";
 import {
   canDownloadSanctionPdf,
   canRemoveSanction,
@@ -99,12 +100,17 @@ export default async function StudentProfilePage({
           <Card>
             <CardHeader>
               <CardTitle>{tStudent("sanctions")}</CardTitle>
-              <CardDescription>{tSanctions("pdfSent")}</CardDescription>
+              <CardDescription className="space-y-2 text-pretty">
+                <span className="block">{tStudent("sanctionsHistoryHint")}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {tSanctions("pdfSent")}
+                </span>
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {sanctions.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  Pas de signalement dans ce périmètre.
+                  {tStudent("sanctionsEmpty")}
                 </p>
               )}
               {sanctions.map((s) => (
@@ -116,7 +122,10 @@ export default async function StudentProfilePage({
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-semibold capitalize">
-                          {tSanctions(`types.${s.type}`)}
+                          {sanctionTypeLabel(
+                            s.type,
+                            params.locale === "en" ? "en" : "fr",
+                          )}
                         </p>
                         <Badge
                           variant={
@@ -134,6 +143,13 @@ export default async function StudentProfilePage({
                           locale: dateLocale,
                         })}
                       </p>
+                      {s.authorName.trim() ? (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {tStudent("sanctionByAuthor", {
+                            author: s.authorName,
+                          })}
+                        </p>
+                      ) : null}
                       <p className="mt-2 text-sm text-muted-foreground">
                         {s.description}
                       </p>

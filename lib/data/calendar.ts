@@ -1,6 +1,7 @@
 import { userSeesSharedCalendarRow } from "@/lib/calendar-shared-visibility";
 import type { CalendarEvent, CalendarEventTarget, CalendarEventType } from "@/types";
 import type { SessionUser } from "@/types";
+import { isStaffAdmin } from "@/lib/roles";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -175,6 +176,25 @@ export async function fetchCalendarEventsVisibleToUser(
     (a, b) =>
       new Date(a.start).getTime() - new Date(b.start).getTime(),
   );
+}
+
+/** Toutes les lignes agenda établissement (non personnel), pour la vue direction sans filtre destinataires. */
+export async function fetchSchoolSharedEventsForPlanner(
+  user: SessionUser,
+): Promise<CalendarEvent[]> {
+  if (!isStaffAdmin(user)) return [];
+
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await createServerSupabase());
+  if (!supabase) return [];
+
+  const all = await loadEventsFromDb(supabase);
+  return all
+    .filter((ev) => !ev.personal)
+    .sort(
+      (a, b) =>
+        new Date(a.start).getTime() - new Date(b.start).getTime(),
+    );
 }
 
 export type CalendarStudentOption = {
