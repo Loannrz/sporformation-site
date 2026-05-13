@@ -4,8 +4,11 @@ import { CloudUploadDocumentButton } from "@/components/cloud/cloud-upload-docum
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AppLocale } from "@/i18n/routing";
 import {
+  attachSignedUrlsToCloudFiles,
   fetchAdminClassOptions,
+  fetchAllCloudExplorerFiles,
   fetchCloudExplorerFolders,
+  fetchCloudStudentUploadOptions,
   formatCloudClassDisplayName,
 } from "@/lib/data/school";
 import { getSessionUser } from "@/lib/session-server";
@@ -28,8 +31,11 @@ export default async function CloudPage({
   }
 
   const folders = await fetchCloudExplorerFolders();
+  const allDocsRaw = await fetchAllCloudExplorerFiles();
+  const allDocuments = await attachSignedUrlsToCloudFiles(allDocsRaw);
 
   const classOptsRaw = await fetchAdminClassOptions();
+  const studentOptions = await fetchCloudStudentUploadOptions();
   const classOptions = classOptsRaw.map((c) => ({
     id: c.id,
     label: formatCloudClassDisplayName(
@@ -51,11 +57,22 @@ export default async function CloudPage({
             locale={params.locale}
             viewer={{ firstName: user.firstName, lastName: user.lastName }}
             classOptions={classOptions}
+            studentOptions={studentOptions}
             defaultClassId={null}
           />
         </CardHeader>
       </Card>
-      <CloudExplorer classFolders={folders.classes} teacherFolders={folders.teachers} />
+      <CloudExplorer
+        locale={params.locale}
+        viewerId={user.id}
+        viewerIsDirector={user.role === "DIRECTEUR"}
+        classOptions={classOptions}
+        studentOptions={studentOptions}
+        classFolders={folders.classes}
+        teacherFolders={folders.teachers}
+        studentFolders={folders.students}
+        allDocuments={allDocuments}
+      />
     </div>
   );
 }

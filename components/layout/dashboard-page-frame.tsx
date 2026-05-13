@@ -33,6 +33,8 @@ const NAV_KEYS = new Set<BreadcrumbLabelKey>([
   "classes",
   "calendar",
   "admin",
+  "adminAnnouncements",
+  "adminCalendar",
   "settings",
   "profile",
   "adminAccounts",

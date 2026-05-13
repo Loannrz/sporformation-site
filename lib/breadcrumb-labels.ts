@@ -7,6 +7,8 @@ export type BreadcrumbLabelKey =
   | "classes"
   | "calendar"
   | "admin"
+  | "adminAnnouncements"
+  | "adminCalendar"
   | "settings"
   | "profile"
   | "adminAccounts"
@@ -49,6 +51,14 @@ export function breadcrumbLabelKeyForSegment(
 
   if (lower === "students" && parent === "admin") {
     return "adminStudents";
+  }
+
+  if (lower === "announcements" && parent === "admin") {
+    return "adminAnnouncements";
+  }
+
+  if (lower === "calendar" && parent === "admin") {
+    return "adminCalendar";
   }
 
   if (lower === "roles" && parent === "administration") {

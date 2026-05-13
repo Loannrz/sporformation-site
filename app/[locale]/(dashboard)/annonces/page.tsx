@@ -1,18 +1,13 @@
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AnnouncementsBulletin } from "@/components/announcements/announcements-bulletin";
+import { PublishAnnouncementDialog } from "@/components/announcements/publish-announcement-dialog";
 import { fetchAnnouncements } from "@/lib/data/school";
+import { orderAnnouncementsForBulletin } from "@/lib/announcements-order";
 import { hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
-import { format } from "date-fns";
-import { fr, enUS } from "date-fns/locale";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
+
+export const dynamic = "force-dynamic";
 
 export default async function AnnouncementsPage({
   params,
@@ -24,54 +19,34 @@ export default async function AnnouncementsPage({
     locale: params.locale,
     namespace: "announcements",
   });
-  const dateLocale = params.locale === "fr" ? fr : enUS;
-  const canCreate = user && hasPermission(user, "CREATE_ANNOUNCEMENTS");
+  const canManage = Boolean(
+    user && hasPermission(user, "CREATE_ANNOUNCEMENTS"),
+  );
 
   const raw = await fetchAnnouncements();
-  const items = [...raw].sort((a, b) => {
-    if (a.importance === b.importance) {
-      return (
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    }
-    return a.importance === "urgent" ? -1 : 1;
-  });
+  const items = orderAnnouncementsForBulletin(raw);
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("subtitle")}</p>
-        {!canCreate && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {t("onlyDirectorCreate")}
-          </p>
-        )}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
+          {!canManage ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t("readOnlyHint")}
+            </p>
+          ) : null}
+        </div>
+        {canManage ? (
+          <PublishAnnouncementDialog locale={params.locale} />
+        ) : null}
       </div>
-      <div className="space-y-4">
-        {items.map((a) => (
-          <Card key={a.id} className="border-border/80">
-            <CardHeader>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant={a.importance === "urgent" ? "urgent" : "secondary"}
-                >
-                  {a.importance}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {format(new Date(a.createdAt), "PPP", { locale: dateLocale })}
-                </span>
-              </div>
-              <CardTitle>{a.title}</CardTitle>
-              <CardDescription>Direction</CardDescription>
-            </CardHeader>
-            <CardContent
-              className="prose prose-sm max-w-none dark:prose-invert"
-              dangerouslySetInnerHTML={{ __html: a.html }}
-            />
-          </Card>
-        ))}
-      </div>
+      <AnnouncementsBulletin
+        announcements={items}
+        locale={params.locale}
+        canManage={canManage}
+      />
     </div>
   );
 }

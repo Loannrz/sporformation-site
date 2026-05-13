@@ -1,7 +1,15 @@
+import { hasPermission } from "@/lib/permissions";
+import { getSessionUser } from "@/lib/session-server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { SessionUser } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  viewerSeesAnnouncement,
+  normalizeAnnouncementAudience,
+} from "@/lib/announcement-audience";
+import { normalizeAnnouncementAccent } from "@/lib/announcement-accents";
+import { normalizeAnnouncementLogoId } from "@/lib/announcement-logos";
 import type {
   Announcement,
   Sanction,
@@ -108,58 +116,92 @@ function profileName(
   return `${p.first_name} ${p.last_name}`;
 }
 
-export async function countStaffProfiles(): Promise<number> {
-  const supabase = await supabaseOrNull();
-  if (!supabase) return 0;
-  const { count, error } = await supabase
-    .from("profiles")
-    .select("id", { count: "exact", head: true });
-  return error ? 0 : count ?? 0;
-}
-
-export async function countStudents(): Promise<number> {
-  const supabase = await supabaseOrNull();
-  if (!supabase) return 0;
-  const { count, error } = await supabase
-    .from("students")
-    .select("id", { count: "exact", head: true });
-  return error ? 0 : count ?? 0;
-}
-
-export async function countClasses(): Promise<number> {
-  const supabase = await supabaseOrNull();
-  if (!supabase) return 0;
-  const { count, error } = await supabase
-    .from("classes")
-    .select("id", { count: "exact", head: true });
-  return error ? 0 : count ?? 0;
-}
-
-export async function countFiles(): Promise<number> {
-  const supabase = await supabaseOrNull();
-  if (!supabase) return 0;
-  const { count, error } = await supabase
-    .from("files")
-    .select("id", { count: "exact", head: true });
-  return error ? 0 : count ?? 0;
-}
-
-export async function fetchAnnouncements(): Promise<Announcement[]> {
-  const supabase = await supabaseOrNull();
-  if (!supabase) return [];
-  const { data, error } = await supabase
+async function fetchAnnouncementsWithClient(
+  supabase: SupabaseClient,
+): Promise<Announcement[]> {
+  const sel =
+    "id,title,html,importance,author_id,created_at,audience,logo_key,accent";
+  let { data, error } = await supabase
     .from("announcements")
-    .select("id,title,html,importance,author_id,created_at")
+    .select(sel)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    const fbAudience = await supabase
+      .from("announcements")
+      .select(
+        "id,title,html,importance,author_id,created_at,audience,logo_key",
+      )
+      .order("created_at", { ascending: false });
+    data = fbAudience.data as typeof data;
+    error = fbAudience.error as typeof error;
+  }
+
+  if (error) {
+    const fallback = await supabase
+      .from("announcements")
+      .select("id,title,html,importance,author_id,created_at")
+      .order("created_at", { ascending: false });
+    data = fallback.data as typeof data;
+    error = fallback.error as typeof error;
+  }
+
   if (error || !data) return [];
-  return data.map((row) => ({
+
+  const rows = data as unknown as {
+    id: string;
+    title: string;
+    html: string;
+    importance?: string | null;
+    author_id?: string | null;
+    created_at: string;
+    audience?: string | null;
+    logo_key?: string | null;
+    accent?: string | null;
+  }[];
+
+  return rows.map((row) => ({
     id: row.id,
     title: row.title,
     html: row.html,
     createdAt: row.created_at,
     importance: row.importance === "urgent" ? "urgent" : "normal",
     authorId: row.author_id ?? "",
+    audience: normalizeAnnouncementAudience(row.audience ?? undefined),
+    logoKey: normalizeAnnouncementLogoId(row.logo_key),
+    accentKey: normalizeAnnouncementAccent(row.accent ?? undefined),
   }));
+}
+
+/**
+ * Annonces en base pour l’interface (après connexion).
+ * Les insertions utilisent le service_role ; sans la même lecture, une RLS mal alignée
+ * renvoie souvent 0 ligne sans erreur. On lit donc avec le service_role côté serveur
+ * lorsqu’il est configuré, tout en exigeant une session valide.
+ */
+export async function fetchAnnouncements(): Promise<Announcement[]> {
+  const user = await getSessionUser();
+  if (!user) return [];
+
+  const admin = createAdminSupabase();
+  if (admin) {
+    return fetchAnnouncementsWithClient(admin);
+  }
+
+  const supabase = await supabaseOrNull();
+  if (!supabase) return [];
+  return fetchAnnouncementsWithClient(supabase);
+}
+
+/** Annonces visibles sur le tableau de bord : filtrage par audience, sauf pour qui peut publier (direction / admin) qui voit tout le flux. */
+export async function fetchAnnouncementsForUser(
+  user: SessionUser,
+): Promise<Announcement[]> {
+  const rows = await fetchAnnouncements();
+  if (hasPermission(user, "CREATE_ANNOUNCEMENTS")) {
+    return rows;
+  }
+  return rows.filter((a) => viewerSeesAnnouncement(user.role, a.audience));
 }
 
 export type AdminClassOption = {
@@ -657,6 +699,81 @@ export function cloudClassIsPastCycle(academicYearEnd: number | null): boolean {
   return academicYearEnd < y;
 }
 
+/**
+ * La classe est comptée pour l’année civile `year` si l’intervalle [début, fin] la contient
+ * (bornes nulles = pas de limite de ce côté).
+ */
+export function classActiveForCalendarYear(
+  academicYearStart: number | null,
+  academicYearEnd: number | null,
+  year: number,
+): boolean {
+  const s =
+    academicYearStart != null && Number.isFinite(academicYearStart)
+      ? academicYearStart
+      : null;
+  const e =
+    academicYearEnd != null && Number.isFinite(academicYearEnd)
+      ? academicYearEnd
+      : null;
+  if (s != null && s > year) return false;
+  if (e != null && e < year) return false;
+  return true;
+}
+
+export type DashboardDirectorStats = {
+  /** Profils « staff » comme dans l’explorateur Cloud (prof., PP, direction, admin.). */
+  teacherStaffCount: number;
+  studentCount: number;
+  /** Classes dont le cycle recouvre l’année civile courante. */
+  activeClassCount: number;
+  fileCount: number;
+};
+
+/**
+ * Totaux tableau de bord direction : service_role si dispo, sinon session (peut rester partiel sous RLS).
+ */
+export async function fetchDashboardDirectorStats(): Promise<DashboardDirectorStats> {
+  const empty: DashboardDirectorStats = {
+    teacherStaffCount: 0,
+    studentCount: 0,
+    activeClassCount: 0,
+    fileCount: 0,
+  };
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
+  if (!supabase) return empty;
+
+  const year = new Date().getFullYear();
+
+  const [profRes, studRes, filesRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .or(
+        "base_role.eq.PROFESSEUR,base_role.eq.PROF_PRINCIPAL,base_role.eq.DIRECTEUR,base_role.eq.ADMINISTRATEUR",
+      ),
+    supabase.from("students").select("id", { count: "exact", head: true }),
+    supabase.from("files").select("id", { count: "exact", head: true }),
+  ]);
+
+  const classRows = await loadAllClassRows(supabase);
+  const activeClassCount = classRows.filter((c) =>
+    classActiveForCalendarYear(
+      c.academic_year_start,
+      c.academic_year_end,
+      year,
+    ),
+  ).length;
+
+  return {
+    teacherStaffCount: profRes.error ? 0 : profRes.count ?? 0,
+    studentCount: studRes.error ? 0 : studRes.count ?? 0,
+    activeClassCount,
+    fileCount: filesRes.error ? 0 : filesRes.count ?? 0,
+  };
+}
+
 export type CloudExplorerClassFolder = {
   id: string;
   /** Libellé affiché : « Nom – début–fin » lorsque les années sont renseignées. */
@@ -674,17 +791,85 @@ export type CloudExplorerTeacherFolder = {
   documentCount: number;
 };
 
+export type CloudExplorerStudentFolder = {
+  id: string;
+  displayName: string;
+  /** Libellé de la classe de l’élève. */
+  classLabel: string | null;
+  documentCount: number;
+};
+
+/** Option élève pour le formulaire d’upload (nom + classe). */
+export type CloudStudentUploadOption = {
+  id: string;
+  label: string;
+  classId: string | null;
+};
+
+export async function fetchCloudStudentUploadOptions(): Promise<
+  CloudStudentUploadOption[]
+> {
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
+  if (!supabase) return [];
+
+  const classRows = await loadAllClassRows(supabase);
+  const classLabelById = new Map(
+    classRows.map((c) => [
+      c.id,
+      formatCloudClassDisplayName(
+        c.name,
+        c.academic_year_start,
+        c.academic_year_end,
+      ),
+    ]),
+  );
+
+  const { data, error } = await supabase
+    .from("students")
+    .select("id,first_name,last_name,class_id")
+    .order("last_name");
+
+  if (error || !data) return [];
+
+  return (data as { id: string; first_name: string; last_name: string; class_id: string | null }[]).map(
+    (s) => {
+      const name = `${s.first_name} ${s.last_name}`.trim() || "—";
+      const cid = s.class_id;
+      const cl = cid ? classLabelById.get(cid) ?? null : null;
+      const label = cl ? `${name} · ${cl}` : name;
+      return { id: s.id, label, classId: cid };
+    },
+  );
+}
+
+/** Classe d’un élève (pré-sélection upload depuis un dossier élève). */
+export async function fetchStudentClassIdForCloud(
+  studentId: string,
+): Promise<string | null> {
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from("students")
+    .select("class_id")
+    .eq("id", studentId)
+    .maybeSingle();
+  return (data?.class_id as string | null | undefined) ?? null;
+}
+
 /**
- * Dossiers Cloud « par classe » et « par professeur » : toutes les entités en base,
- * avec le nombre de fichiers liés (`files.class_id` / `files.owner_id`).
+ * Dossiers Cloud : classes, professeurs, élèves + comptages fichiers.
  */
 export async function fetchCloudExplorerFolders(): Promise<{
   classes: CloudExplorerClassFolder[];
   teachers: CloudExplorerTeacherFolder[];
+  students: CloudExplorerStudentFolder[];
 }> {
   const empty = {
     classes: [] as CloudExplorerClassFolder[],
     teachers: [] as CloudExplorerTeacherFolder[],
+    students: [] as CloudExplorerStudentFolder[],
   };
   const admin = createAdminSupabase();
   const supabase = admin ?? (await supabaseOrNull());
@@ -700,12 +885,29 @@ export async function fetchCloudExplorerFolders(): Promise<{
     )
     .order("last_name");
 
+  const { data: studRows, error: studErr } = await supabase
+    .from("students")
+    .select("id,first_name,last_name,class_id")
+    .order("last_name");
+
   const { data: fileRows, error: filesErr } = await supabase
     .from("files")
-    .select("class_id,owner_id");
+    .select("class_id,owner_id,student_id");
+
+  const classLabelById = new Map(
+    classRows.map((c) => [
+      c.id,
+      formatCloudClassDisplayName(
+        c.name,
+        c.academic_year_start,
+        c.academic_year_end,
+      ),
+    ]),
+  );
 
   const classCounts = new Map<string, number>();
   const ownerCounts = new Map<string, number>();
+  const studentCounts = new Map<string, number>();
   if (!filesErr && fileRows) {
     for (const f of fileRows) {
       const cid = f.class_id as string | null;
@@ -715,6 +917,10 @@ export async function fetchCloudExplorerFolders(): Promise<{
       const oid = f.owner_id as string | null;
       if (oid) {
         ownerCounts.set(oid, (ownerCounts.get(oid) ?? 0) + 1);
+      }
+      const sid = f.student_id as string | null | undefined;
+      if (sid) {
+        studentCounts.set(sid, (studentCounts.get(sid) ?? 0) + 1);
       }
     }
   }
@@ -741,11 +947,31 @@ export async function fetchCloudExplorerFolders(): Promise<{
     }));
   }
 
-  return { classes, teachers };
+  let students: CloudExplorerStudentFolder[] = [];
+  if (!studErr && studRows) {
+    students = (
+      studRows as {
+        id: string;
+        first_name: string;
+        last_name: string;
+        class_id: string | null;
+      }[]
+    ).map((s) => {
+      const cid = s.class_id;
+      return {
+        id: s.id,
+        displayName: `${s.first_name} ${s.last_name}`.trim() || "—",
+        classLabel: cid ? classLabelById.get(cid) ?? null : null,
+        documentCount: studentCounts.get(s.id) ?? 0,
+      };
+    });
+  }
+
+  return { classes, teachers, students };
 }
 
 /**
- * Titre affiché sur la page dossier Cloud (classe ou professeur) à partir du slug d’URL.
+ * Titre affiché sur la page dossier Cloud (classe, professeur ou élève).
  */
 export async function resolveCloudFolderHeading(
   dossierParam: string,
@@ -782,12 +1008,25 @@ export async function resolveCloudFolderHeading(
     return { title: name || slug };
   }
 
+  if (slug.startsWith("eleve-")) {
+    const id = slug.slice("eleve-".length);
+    const { data } = await supabase
+      .from("students")
+      .select("first_name,last_name")
+      .eq("id", id)
+      .maybeSingle();
+    if (!data) return fallback;
+    const name = `${data.first_name} ${data.last_name}`.trim();
+    return { title: name || slug };
+  }
+
   return fallback;
 }
 
 export type CloudFolderSlugParsed =
   | { kind: "class"; id: string }
-  | { kind: "teacher"; id: string };
+  | { kind: "teacher"; id: string }
+  | { kind: "student"; id: string };
 
 export function parseCloudFolderSlug(
   dossierParam: string,
@@ -803,6 +1042,11 @@ export function parseCloudFolderSlug(
     if (!id) return null;
     return { kind: "teacher", id };
   }
+  if (slug.startsWith("eleve-")) {
+    const id = slug.slice("eleve-".length);
+    if (!id) return null;
+    return { kind: "student", id };
+  }
   return null;
 }
 
@@ -813,6 +1057,12 @@ export type CloudFolderFileRow = {
   mime: string | null;
   createdAt: string;
   version: number;
+  /** Classe associée au fichier (nullable). */
+  classId: string | null;
+  /** Professeur ou auteur du dépôt (auth user id). */
+  ownerId: string | null;
+  /** Élève associé au fichier (nullable). */
+  studentId: string | null;
   /** Chemin dans le bucket `documents` pour la version affichée. */
   storagePath: string | null;
 };
@@ -821,9 +1071,23 @@ export type CloudFolderFileWithUrl = CloudFolderFileRow & {
   signedUrl: string | null;
 };
 
-/** Fichiers liés à un dossier Cloud (classe ou professeur). */
+/** Métadonnées classe / professeur / élève pour la vue « tous les documents » du Cloud. */
+export type CloudExplorerFileRow = CloudFolderFileRow & {
+  /** Libellé classe formaté ; null si aucune classe liée. */
+  classLabel: string | null;
+  /** Nom affiché du professeur déposant ; null si inconnu ou non lié. */
+  teacherName: string | null;
+  /** Nom de l’élève concerné ; null si aucun. */
+  studentName: string | null;
+};
+
+export type CloudExplorerFileWithUrl = CloudExplorerFileRow & {
+  signedUrl: string | null;
+};
+
+/** Fichiers liés à un dossier Cloud (classe, professeur ou élève). */
 export async function fetchCloudFolderFiles(
-  kind: "class" | "teacher",
+  kind: "class" | "teacher" | "student",
   entityId: string,
 ): Promise<CloudFolderFileRow[]> {
   const admin = createAdminSupabase();
@@ -831,27 +1095,31 @@ export async function fetchCloudFolderFiles(
   if (!supabase) return [];
 
   const fullSelect =
-    "id,title,description,logical_key,mime,created_at,class_id,owner_id";
-  const legacySelect = "id,logical_key,mime,created_at,class_id,owner_id";
+    "id,title,description,logical_key,mime,created_at,class_id,owner_id,student_id";
+  const legacySelect =
+    "id,logical_key,mime,created_at,class_id,owner_id";
 
-  const run = async (sel: string) =>
+  const col =
     kind === "class"
-      ? await supabase
-          .from("files")
-          .select(sel)
-          .eq("class_id", entityId)
-          .order("created_at", { ascending: false })
-      : await supabase
-          .from("files")
-          .select(sel)
-          .eq("owner_id", entityId)
-          .order("created_at", { ascending: false });
+      ? "class_id"
+      : kind === "teacher"
+        ? "owner_id"
+        : "student_id";
 
-  let { data, error } = await run(fullSelect);
-  if (error) {
-    ({ data, error } = await run(legacySelect));
+  const run = (sel: string) =>
+    supabase.from("files").select(sel).eq(col, entityId).order("created_at", {
+      ascending: false,
+    });
+
+  let res = await run(fullSelect);
+  if (res.error) {
+    if (kind === "student") {
+      return [];
+    }
+    res = await run(legacySelect);
   }
 
+  const { data, error } = res;
   if (error || !data?.length) return [];
 
   const rows = data as unknown as {
@@ -861,6 +1129,9 @@ export async function fetchCloudFolderFiles(
     created_at?: string | null;
     title?: string | null;
     description?: string | null;
+    class_id?: string | null;
+    owner_id?: string | null;
+    student_id?: string | null;
   }[];
 
   const ids = rows.map((f) => f.id);
@@ -895,7 +1166,149 @@ export async function fetchCloudFolderFiles(
       mime: f.mime ?? null,
       createdAt: String(f.created_at ?? ""),
       version: lv?.version ?? 1,
+      classId: f.class_id ?? null,
+      ownerId: f.owner_id ?? null,
+      studentId: f.student_id ?? null,
       storagePath: lv?.storagePath || null,
+    };
+  });
+}
+
+/**
+ * Tous les fichiers Cloud avec libellés classe et professeur (explorateur racine).
+ */
+export async function fetchAllCloudExplorerFiles(): Promise<CloudExplorerFileRow[]> {
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
+  if (!supabase) return [];
+
+  const classRows = await loadAllClassRows(supabase);
+  const classLabelById = new Map(
+    classRows.map((c) => [
+      c.id,
+      formatCloudClassDisplayName(
+        c.name,
+        c.academic_year_start,
+        c.academic_year_end,
+      ),
+    ]),
+  );
+
+  const fullSelect =
+    "id,title,description,logical_key,mime,created_at,class_id,owner_id,student_id";
+  const legacySelect = "id,logical_key,mime,created_at,class_id,owner_id";
+
+  type FileRowAll = {
+    id: string;
+    class_id?: string | null;
+    owner_id?: string | null;
+    student_id?: string | null;
+    logical_key?: string | null;
+    mime?: string | null;
+    created_at?: string | null;
+    title?: string | null;
+    description?: string | null;
+  };
+
+  const attemptFull = await supabase
+    .from("files")
+    .select(fullSelect)
+    .order("created_at", { ascending: false });
+
+  const attempt = attemptFull.error
+    ? await supabase
+        .from("files")
+        .select(legacySelect)
+        .order("created_at", { ascending: false })
+    : attemptFull;
+
+  const data = attempt.data as FileRowAll[] | null;
+  const error = attempt.error;
+
+  if (error || !data?.length) return [];
+
+  const rows = data;
+
+  const ownerIds = [
+    ...new Set(
+      rows
+        .map((f) => f.owner_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const teacherNameById = new Map<string, string>();
+  if (ownerIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id,first_name,last_name")
+      .in("id", ownerIds);
+    for (const p of profs ?? []) {
+      const name = `${p.first_name} ${p.last_name}`.trim();
+      teacherNameById.set(p.id as string, name || "—");
+    }
+  }
+
+  const studentIds = [
+    ...new Set(
+      rows
+        .map((f) => f.student_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const studentNameById = new Map<string, string>();
+  if (studentIds.length > 0) {
+    const { data: studs } = await supabase
+      .from("students")
+      .select("id,first_name,last_name")
+      .in("id", studentIds);
+    for (const s of studs ?? []) {
+      const name = `${s.first_name} ${s.last_name}`.trim();
+      studentNameById.set(s.id as string, name || "—");
+    }
+  }
+
+  const ids = rows.map((f) => f.id);
+  const { data: vers } = await supabase
+    .from("file_versions")
+    .select("file_id,version,storage_path")
+    .in("file_id", ids);
+
+  const latest = new Map<string, { version: number; storagePath: string }>();
+  for (const v of vers ?? []) {
+    const fid = v.file_id as string;
+    const ver = Number(v.version);
+    const storagePath = String(v.storage_path ?? "");
+    const cur = latest.get(fid);
+    if (!cur || ver > cur.version) {
+      latest.set(fid, {
+        version: ver,
+        storagePath: storagePath || (cur?.storagePath ?? ""),
+      });
+    }
+  }
+
+  return rows.map((f) => {
+    const id = f.id;
+    const titleRaw = f.title?.trim();
+    const logicalKey = String(f.logical_key ?? "");
+    const lv = latest.get(id);
+    const cid = (f.class_id as string | null | undefined) ?? null;
+    const oid = (f.owner_id as string | null | undefined) ?? null;
+    const sid = (f.student_id as string | null | undefined) ?? null;
+    return {
+      id,
+      title: titleRaw || logicalKey,
+      description: String(f.description ?? ""),
+      mime: f.mime ?? null,
+      createdAt: String(f.created_at ?? ""),
+      version: lv?.version ?? 1,
+      storagePath: lv?.storagePath || null,
+      classId: cid,
+      ownerId: oid,
+      studentId: sid,
+      classLabel: cid ? classLabelById.get(cid) ?? null : null,
+      teacherName: oid ? teacherNameById.get(oid) ?? null : null,
+      studentName: sid ? studentNameById.get(sid) ?? null : null,
     };
   });
 }
@@ -903,15 +1316,15 @@ export async function fetchCloudFolderFiles(
 const CLOUD_DOCUMENTS_BUCKET = "documents";
 
 /** URL signée (lecture) pour chaque fichier ; null si pas de chemin ou erreur Storage. */
-export async function attachSignedUrlsToCloudFiles(
-  files: CloudFolderFileRow[],
-): Promise<CloudFolderFileWithUrl[]> {
+export async function attachSignedUrlsToCloudFiles<T extends CloudFolderFileRow>(
+  files: T[],
+): Promise<Array<T & { signedUrl: string | null }>> {
   const admin = createAdminSupabase();
   if (!admin || files.length === 0) {
     return files.map((f) => ({ ...f, signedUrl: null }));
   }
 
-  const out: CloudFolderFileWithUrl[] = [];
+  const out: Array<T & { signedUrl: string | null }> = [];
   for (const f of files) {
     if (!f.storagePath) {
       out.push({ ...f, signedUrl: null });

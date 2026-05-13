@@ -15,6 +15,8 @@ import {
   attachSignedUrlsToCloudFiles,
   fetchAdminClassOptions,
   fetchCloudFolderFiles,
+  fetchCloudStudentUploadOptions,
+  fetchStudentClassIdForCloud,
   formatCloudClassDisplayName,
   parseCloudFolderSlug,
   resolveCloudFolderHeading,
@@ -45,6 +47,7 @@ export default async function CloudFolderPage({
   const files = await attachSignedUrlsToCloudFiles(filesRaw);
 
   const classOptsRaw = await fetchAdminClassOptions();
+  const studentOptions = await fetchCloudStudentUploadOptions();
   const classOptions = classOptsRaw.map((c) => ({
     id: c.id,
     label: formatCloudClassDisplayName(
@@ -54,7 +57,15 @@ export default async function CloudFolderPage({
     ),
   }));
 
-  const defaultClassId = parsed?.kind === "class" ? parsed.id : null;
+  let defaultClassId: string | null =
+    parsed?.kind === "class" ? parsed.id : null;
+  const defaultStudentId: string | null =
+    parsed?.kind === "student" ? parsed.id : null;
+  if (parsed?.kind === "student") {
+    defaultClassId = await fetchStudentClassIdForCloud(parsed.id);
+  }
+
+  const viewerIsDirector = user.role === "DIRECTEUR";
 
   return (
     <div className="space-y-6">
@@ -70,7 +81,9 @@ export default async function CloudFolderPage({
           locale={params.locale}
           viewer={{ firstName: user.firstName, lastName: user.lastName }}
           classOptions={classOptions}
+          studentOptions={studentOptions}
           defaultClassId={defaultClassId}
+          defaultStudentId={defaultStudentId}
           folderSlug={params.dossier}
         />
       </div>
@@ -83,7 +96,15 @@ export default async function CloudFolderPage({
           {files.length === 0 ? (
             <p>{t("folderNoDocuments")}</p>
           ) : (
-            <CloudFolderFileBrowser files={files} />
+            <CloudFolderFileBrowser
+              files={files}
+              locale={params.locale}
+              viewerId={user.id}
+              viewerIsDirector={viewerIsDirector}
+              classOptions={classOptions}
+              studentOptions={studentOptions}
+              folderSlug={params.dossier}
+            />
           )}
         </CardContent>
       </Card>

@@ -138,12 +138,23 @@ create table if not exists public.messages (
 do $$ begin create type announcement_priority as enum ('normal','urgent');
 exception when duplicate_object then null; end $$;
 
+do $$ begin create type announcement_audience as enum (
+  'ALL_STAFF',
+  'DIRECTION_ONLY',
+  'HEAD_TEACHERS_ONLY',
+  'CLASSROOM_TEACHERS'
+);
+exception when duplicate_object then null; end $$;
+
 create table if not exists public.announcements (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   html text not null,
   importance announcement_priority default 'normal',
   author_id uuid references public.profiles(id),
+  audience announcement_audience not null default 'ALL_STAFF',
+  logo_key text default 'megaphone',
+  accent text default 'slate',
   created_at timestamptz default now()
 );
 

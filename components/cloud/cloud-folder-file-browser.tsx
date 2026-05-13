@@ -1,12 +1,14 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { CloudFolderFileWithUrl } from "@/lib/data/school";
+import type { CloudFolderFileWithUrl, CloudStudentUploadOption } from "@/lib/data/school";
+import type { AppLocale } from "@/i18n/routing";
+import type { CloudClassSelectOption } from "./cloud-upload-document-button";
 import { CloudFolderFileGrid } from "./cloud-folder-file-grid";
 
 export type CloudFolderSortMode =
@@ -19,11 +21,24 @@ export type CloudFolderSortMode =
 
 type Props = {
   files: CloudFolderFileWithUrl[];
+  locale: AppLocale;
+  viewerId: string;
+  viewerIsDirector: boolean;
+  classOptions: CloudClassSelectOption[];
+  studentOptions: CloudStudentUploadOption[];
+  folderSlug?: string | null;
 };
 
-export function CloudFolderFileBrowser({ files }: Props) {
+export function CloudFolderFileBrowser({
+  files,
+  locale,
+  viewerId,
+  viewerIsDirector,
+  classOptions,
+  studentOptions,
+  folderSlug = null,
+}: Props) {
   const t = useTranslations("cloud");
-  const locale = useLocale();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<CloudFolderSortMode>("date-desc");
 
@@ -161,7 +176,15 @@ export function CloudFolderFileBrowser({ files }: Props) {
           {needle ? t("folderSearchNoResults") : t("folderNoDocuments")}
         </p>
       ) : (
-        <CloudFolderFileGrid files={processed} />
+        <CloudFolderFileGrid
+          files={processed}
+          locale={locale}
+          viewerId={viewerId}
+          viewerIsDirector={viewerIsDirector}
+          classOptions={classOptions}
+          studentOptions={studentOptions}
+          folderSlug={folderSlug}
+        />
       )}
     </div>
   );

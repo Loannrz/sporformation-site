@@ -1,4 +1,5 @@
 import { Link } from "@/i18n/navigation";
+import { AnnouncementLogoMark } from "@/components/announcements/announcement-logo-mark";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -8,12 +9,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  countClasses,
-  countFiles,
-  countStaffProfiles,
-  countStudents,
-  fetchAnnouncements,
+  fetchAnnouncementsForUser,
   fetchClassesWithStudents,
+  fetchDashboardDirectorStats,
   fetchRecentSanctionsForUser,
 } from "@/lib/data/school";
 import { hasPermission } from "@/lib/permissions";
@@ -22,6 +20,10 @@ import { format } from "date-fns";
 import { fr as frLocale, enUS } from "date-fns/locale";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
+import { announcementAccentArticleClass } from "@/lib/announcement-accents";
+import { cn } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage({
   params,
@@ -45,23 +47,22 @@ export default async function DashboardPage({
   }
 
   const directorExtras = hasPermission(user, "VIEW_DIRECTOR_DASHBOARD");
-  const [
-    announcements,
-    sanctionsPreview,
-    staffCount,
-    studentCount,
-    classCount,
-    fileCount,
-    classesIndex,
-  ] = await Promise.all([
-    fetchAnnouncements(),
-    fetchRecentSanctionsForUser(user, 4),
-    directorExtras ? countStaffProfiles() : Promise.resolve(0),
-    directorExtras ? countStudents() : Promise.resolve(0),
-    directorExtras ? countClasses() : Promise.resolve(0),
-    directorExtras ? countFiles() : Promise.resolve(0),
-    fetchClassesWithStudents(),
-  ]);
+  const emptyDirectorStats = {
+    teacherStaffCount: 0,
+    studentCount: 0,
+    activeClassCount: 0,
+    fileCount: 0,
+  };
+
+  const [announcements, sanctionsPreview, directorStats, classesIndex] =
+    await Promise.all([
+      fetchAnnouncementsForUser(user),
+      fetchRecentSanctionsForUser(user, 4),
+      directorExtras
+        ? fetchDashboardDirectorStats()
+        : Promise.resolve(emptyDirectorStats),
+      fetchClassesWithStudents(),
+    ]);
 
   const classNameById = new Map(classesIndex.map((c) => [c.id, c.name]));
 
@@ -94,10 +95,23 @@ export default async function DashboardPage({
 
       {directorExtras && (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label={t("statsTeachers")} value={`${staffCount}`} />
-          <StatCard label={t("statsStudents")} value={`${studentCount}`} />
-          <StatCard label={t("statsClasses")} value={`${classCount}`} />
-          <StatCard label={t("statsFiles")} value={`${fileCount}`} />
+          <StatCard
+            label={t("statsTeachers")}
+            hint={t("statsTeachersHint")}
+            value={`${directorStats.teacherStaffCount}`}
+          />
+          <StatCard
+            label={t("statsStudents")}
+            value={`${directorStats.studentCount}`}
+          />
+          <StatCard
+            label={t("statsClasses")}
+            value={`${directorStats.activeClassCount}`}
+          />
+          <StatCard
+            label={t("statsFiles")}
+            value={`${directorStats.fileCount}`}
+          />
         </section>
       )}
 
@@ -166,45 +180,60 @@ export default async function DashboardPage({
 
         <Card className="lg:col-span-2 border-primary/25 dark:border-primary/15">
           <CardHeader>
-            <CardTitle>
-              {directorExtras ? t("createAnnouncement") : tAnnounce("title")}
-            </CardTitle>
-            <CardDescription>{tAnnounce("subtitle")}</CardDescription>
+            <CardTitle>{tAnnounce("title")}</CardTitle>
+            <CardDescription className="space-y-1">
+              <span className="block">{tAnnounce("subtitle")}</span>
+              {hasPermission(user, "CREATE_ANNOUNCEMENTS") ? (
+                <Link
+                  href="/admin/announcements"
+                  className="inline-block text-xs font-medium text-primary underline underline-offset-2"
+                >
+                  {tAnnounce("composerLink")}
+                </Link>
+              ) : null}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {sortedAnnouncements.map((a) => (
               <article
                 key={a.id}
-                className="rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm transition hover:border-primary/35"
+                className={cn(
+                  "flex gap-3 rounded-xl border p-4 backdrop-blur-sm transition",
+                  announcementAccentArticleClass(a.accentKey),
+                )}
               >
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant={a.importance === "urgent" ? "urgent" : "secondary"}
-                  >
-                    {a.importance}
-                  </Badge>
-                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {format(new Date(a.createdAt), "d MMM yyyy", {
-                      locale: dateLocale,
-                    })}
-                  </span>
-                </div>
-                <p className="text-sm font-semibold leading-snug">{a.title}</p>
-                <div
-                  className="prose prose-sm mt-2 max-w-none dark:prose-invert"
-                  dangerouslySetInnerHTML={{ __html: a.html }}
+                <AnnouncementLogoMark
+                  logoKey={a.logoKey}
+                  accentKey={a.accentKey}
                 />
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant={
+                        a.importance === "urgent" ? "urgent" : "secondary"
+                      }
+                    >
+                      {a.importance}
+                    </Badge>
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {format(new Date(a.createdAt), "d MMM yyyy", {
+                        locale: dateLocale,
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-sm font-semibold leading-snug">{a.title}</p>
+                  <div
+                    className="prose prose-sm mt-2 max-w-none dark:prose-invert"
+                    dangerouslySetInnerHTML={{ __html: a.html }}
+                  />
+                </div>
               </article>
             ))}
             {sortedAnnouncements.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Aucune annonce pour le moment.
-              </p>
-            )}
-            {directorExtras && (
-              <p className="text-xs text-muted-foreground">
-                Publication des annonces depuis Supabase ou /admin.
-              </p>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>{tAnnounce("empty")}</p>
+                <p className="text-xs">{tAnnounce("emptyHint")}</p>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -213,11 +242,22 @@ export default async function DashboardPage({
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <Card className="border-none bg-gradient-to-br from-card to-muted/40 shadow-soft dark:shadow-soft-dark">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
+        {hint ? (
+          <p className="text-[11px] leading-snug text-muted-foreground">{hint}</p>
+        ) : null}
         <CardTitle className="text-3xl">{value}</CardTitle>
       </CardHeader>
     </Card>

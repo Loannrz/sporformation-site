@@ -53,7 +53,7 @@ export default async function LoginPage({
       <div className="pointer-events-none absolute inset-0 gradient-mesh dark:gradient-mesh-dark" />
       <div className="relative z-10 w-full max-w-md animate-in fade-in zoom-in-[0.99] duration-500">
         <div className="mb-10 flex justify-center">
-          <SporformationLogo />
+          <SporformationLogo className="h-10 max-w-[220px]" />
         </div>
         <Card className="glass border-white/45 dark:border-white/10">
           <CardHeader className="space-y-2">

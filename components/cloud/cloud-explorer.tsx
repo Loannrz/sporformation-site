@@ -1,6 +1,6 @@
 "use client";
 
-import { GraduationCap, Search, User } from "lucide-react";
+import { Files, GraduationCap, Search, User, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
@@ -11,12 +11,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type {
   CloudExplorerClassFolder,
+  CloudExplorerFileWithUrl,
+  CloudExplorerStudentFolder,
   CloudExplorerTeacherFolder,
+  CloudStudentUploadOption,
 } from "@/lib/data/school";
+import type { AppLocale } from "@/i18n/routing";
+import type { CloudClassSelectOption } from "./cloud-upload-document-button";
+import { CloudExplorerAllDocuments } from "./cloud-explorer-all-documents";
 
 type Props = {
+  locale: AppLocale;
+  viewerId: string;
+  viewerIsDirector: boolean;
+  classOptions: CloudClassSelectOption[];
+  studentOptions: CloudStudentUploadOption[];
   classFolders: CloudExplorerClassFolder[];
   teacherFolders: CloudExplorerTeacherFolder[];
+  studentFolders: CloudExplorerStudentFolder[];
+  allDocuments: CloudExplorerFileWithUrl[];
 };
 
 type ClassTimeFilter = "all" | "current" | "past";
@@ -28,7 +41,17 @@ function matchesQuery(text: string, query: string): boolean {
 }
 
 /** Explorateur Cloud : recherche, filtres cycle classe, cartes. */
-export function CloudExplorer({ classFolders, teacherFolders }: Props) {
+export function CloudExplorer({
+  locale,
+  viewerId,
+  viewerIsDirector,
+  classOptions,
+  studentOptions,
+  classFolders,
+  teacherFolders,
+  studentFolders,
+  allDocuments,
+}: Props) {
   const t = useTranslations("cloud");
   const [tab, setTab] = useState("class");
   const [query, setQuery] = useState("");
@@ -47,6 +70,14 @@ export function CloudExplorer({ classFolders, teacherFolders }: Props) {
     return teacherFolders.filter((p) => matchesQuery(p.displayName, query));
   }, [teacherFolders, query]);
 
+  const filteredStudents = useMemo(() => {
+    return studentFolders.filter(
+      (s) =>
+        matchesQuery(s.displayName, query) ||
+        (s.classLabel != null && matchesQuery(s.classLabel, query)),
+    );
+  }, [studentFolders, query]);
+
   const classEmpty =
     classFolders.length === 0
       ? t("emptyNoClassesInDb")
@@ -58,6 +89,13 @@ export function CloudExplorer({ classFolders, teacherFolders }: Props) {
     teacherFolders.length === 0
       ? t("emptyNoTeachersInDb")
       : filteredTeachers.length === 0
+        ? t("explorerNoSearchResults")
+        : null;
+
+  const studentEmpty =
+    studentFolders.length === 0
+      ? t("emptyNoStudentsInDb")
+      : filteredStudents.length === 0
         ? t("explorerNoSearchResults")
         : null;
 
@@ -83,7 +121,11 @@ export function CloudExplorer({ classFolders, teacherFolders }: Props) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("explorerSearchPlaceholder")}
+            placeholder={
+              tab === "all"
+                ? t("explorerSearchPlaceholderDocs")
+                : t("explorerSearchPlaceholder")
+            }
             autoComplete="off"
             className="h-11 rounded-xl border-border/70 bg-background/90 pl-10 shadow-sm backdrop-blur-sm transition focus-visible:ring-foreground/20"
           />
@@ -92,20 +134,34 @@ export function CloudExplorer({ classFolders, teacherFolders }: Props) {
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="w-full space-y-6">
-        <TabsList className="grid h-12 w-full grid-cols-2 gap-1 rounded-xl bg-muted/70 p-1.5 dark:bg-muted/50">
+        <TabsList className="grid h-auto min-h-11 w-full grid-cols-2 gap-1 rounded-xl bg-muted/70 p-1.5 dark:bg-muted/50 sm:grid-cols-4 sm:min-h-12">
           <TabsTrigger
             value="class"
-            className="gap-2 rounded-lg text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm sm:text-sm"
+            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
           >
-            <GraduationCap className="h-4 w-4 shrink-0 opacity-80" />
-            {t("tabsClass")}
+            <GraduationCap className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
+            <span className="truncate">{t("tabsClass")}</span>
           </TabsTrigger>
           <TabsTrigger
             value="teacher"
-            className="gap-2 rounded-lg text-xs data-[state=active]:bg-card data-[state=active]:shadow-sm sm:text-sm"
+            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
           >
-            <User className="h-4 w-4 shrink-0 opacity-80" />
-            {t("tabsTeacher")}
+            <User className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
+            <span className="truncate">{t("tabsTeacher")}</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="student"
+            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
+          >
+            <Users className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
+            <span className="truncate">{t("tabsStudent")}</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="all"
+            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
+          >
+            <Files className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
+            <span className="truncate">{t("tabsAllDocuments")}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -170,6 +226,7 @@ export function CloudExplorer({ classFolders, teacherFolders }: Props) {
                   key={c.id}
                   kind="class"
                   label={c.displayLabel}
+                  secondaryLine={null}
                   documentCount={c.documentCount}
                   href={`/cloud/${encodeURIComponent(`classe-${c.id}`)}`}
                   subtitle={t("folderLeadershipBlurb")}
@@ -191,6 +248,7 @@ export function CloudExplorer({ classFolders, teacherFolders }: Props) {
                   key={p.id}
                   kind="teacher"
                   label={p.displayName}
+                  secondaryLine={null}
                   documentCount={p.documentCount}
                   href={`/cloud/${encodeURIComponent(`prof-${p.id}`)}`}
                   subtitle={t("folderLeadershipBlurb")}
@@ -200,6 +258,40 @@ export function CloudExplorer({ classFolders, teacherFolders }: Props) {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="student" className="mt-0 focus-visible:outline-none">
+          {studentEmpty ? (
+            <EmptyExplorerHint>{studentEmpty}</EmptyExplorerHint>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredStudents.map((s) => (
+                <ExplorerCard
+                  key={s.id}
+                  kind="student"
+                  label={s.displayName}
+                  secondaryLine={s.classLabel}
+                  documentCount={s.documentCount}
+                  href={`/cloud/${encodeURIComponent(`eleve-${s.id}`)}`}
+                  subtitle={t("folderStudentBlurb")}
+                  meta=""
+                  pastCycle={false}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="all" className="mt-0 focus-visible:outline-none">
+          <CloudExplorerAllDocuments
+            files={allDocuments}
+            searchQuery={query}
+            locale={locale}
+            viewerId={viewerId}
+            viewerIsDirector={viewerIsDirector}
+            classOptions={classOptions}
+            studentOptions={studentOptions}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -217,14 +309,16 @@ function EmptyExplorerHint({ children }: { children: string }) {
 function ExplorerCard({
   kind,
   label,
+  secondaryLine,
   documentCount,
   subtitle,
   href,
   meta,
   pastCycle,
 }: {
-  kind: "class" | "teacher";
+  kind: "class" | "teacher" | "student";
   label: string;
+  secondaryLine: string | null;
   documentCount: number;
   subtitle: string;
   href: string;
@@ -232,11 +326,13 @@ function ExplorerCard({
   pastCycle: boolean;
 }) {
   const t = useTranslations("cloud");
-  const Icon = kind === "class" ? GraduationCap : User;
+  const Icon = kind === "class" ? GraduationCap : kind === "teacher" ? User : Users;
   const iconWrap =
     kind === "class"
       ? "bg-sky-500/10 text-sky-800 dark:bg-sky-500/15 dark:text-sky-200"
-      : "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400";
+      : kind === "teacher"
+        ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400"
+        : "bg-violet-500/12 text-violet-800 dark:bg-violet-400/90 dark:text-violet-100";
 
   return (
     <div
@@ -264,6 +360,11 @@ function ExplorerCard({
         <p className="line-clamp-2 text-sm font-semibold leading-snug tracking-tight text-foreground">
           {label}
         </p>
+        {secondaryLine ? (
+          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+            {secondaryLine}
+          </p>
+        ) : null}
         <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{subtitle}</p>
         <div className="mt-3 flex items-center gap-2">
           <span className="rounded-full bg-muted/80 px-2.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">

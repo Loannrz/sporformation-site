@@ -1,11 +1,13 @@
 import { AdminBackLink } from "@/components/admin/admin-back-link";
 import { CreateTeacherModal } from "@/components/admin/create-teacher-modal";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchAdminClassOptions } from "@/lib/data/school";
 import { fetchAllStaffForAdmin } from "@/lib/data/staff-admin";
 import { getSessionUser } from "@/lib/session-server";
 import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { hasPermission } from "@/lib/permissions";
 import { redirectToAccessDenied } from "@/lib/guards";
 import { Link } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
@@ -30,6 +32,11 @@ export default async function AdminAccountsPage({
     namespace: "admin.accounts",
   });
 
+  const tPub = await getTranslations({
+    locale: params.locale,
+    namespace: "admin.publishAnnouncement",
+  });
+
   const [staffList, classOptions] = await Promise.all([
     fetchAllStaffForAdmin(),
     fetchAdminClassOptions(),
@@ -48,13 +55,19 @@ export default async function AdminAccountsPage({
           <h1 className="text-3xl font-semibold">{t("accountsTitle")}</h1>
           <p className="text-muted-foreground">{ta("listSubtitle")}</p>
         </div>
-        <CreateTeacherModal
-          locale={params.locale}
-          viewerRole={user.role}
-          classOptions={classOptions}
-        />
+        <div className="flex flex-wrap gap-2">
+          {hasPermission(user, "CREATE_ANNOUNCEMENTS") ? (
+            <Button variant="outline" size="sm" asChild className="shrink-0">
+              <Link href="/admin/announcements">{tPub("ctaFromAccounts")}</Link>
+            </Button>
+          ) : null}
+          <CreateTeacherModal
+            locale={params.locale}
+            viewerRole={user.role}
+            classOptions={classOptions}
+          />
+        </div>
       </div>
-
       <div className="grid gap-4 md:grid-cols-2">
         {visible.map((s) => (
           <Link key={s.id} href={`/administration/comptes/${s.id}`}>

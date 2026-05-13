@@ -1,6 +1,5 @@
 import type {
   Announcement,
-  CalendarEvent,
   Conversation,
   CustomSchoolRole,
   SchoolClass,
@@ -124,6 +123,9 @@ export const MOCK_ANNOUNCEMENTS: Announcement[] = [
     createdAt: new Date().toISOString(),
     importance: "urgent",
     authorId: director.id,
+    audience: "CLASSROOM_TEACHERS",
+    logoKey: "calendar",
+    accentKey: "sky",
   },
   {
     id: "ann-1",
@@ -132,24 +134,9 @@ export const MOCK_ANNOUNCEMENTS: Announcement[] = [
     createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
     importance: "normal",
     authorId: director.id,
-  },
-];
-
-export const MOCK_EVENTS: CalendarEvent[] = [
-  {
-    id: "ev-1",
-    title: "Réunion équipe vie scolaire",
-    start: new Date(Date.now() + 86400000).toISOString(),
-    end: new Date(Date.now() + 86400000 + 3600000 * 2).toISOString(),
-    type: "meeting",
-  },
-  {
-    id: "ev-2",
-    title: "Cours collectif — Classe 3",
-    start: new Date(Date.now() + 86400000 * 2).toISOString(),
-    end: new Date(Date.now() + 86400000 * 2 + 3600000 * 3).toISOString(),
-    type: "course",
-    classId: "class-3",
+    audience: "ALL_STAFF",
+    logoKey: "megaphone",
+    accentKey: "emerald",
   },
 ];
 

@@ -11,7 +11,7 @@ import { redirectToAccessDenied } from "@/lib/guards";
 import { Link, redirect } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
-import { Users, School, GraduationCap } from "lucide-react";
+import { Users, School, GraduationCap, Megaphone, CalendarDays } from "lucide-react";
 
 export default async function AdminHubPage({
   params,
@@ -53,6 +53,18 @@ export default async function AdminHubPage({
       desc: t("studentsDesc"),
       Icon: GraduationCap,
     },
+    {
+      href: "/admin/calendar",
+      title: t("calendarTitle"),
+      desc: t("calendarDesc"),
+      Icon: CalendarDays,
+    },
+    {
+      href: "/admin/announcements",
+      title: t("announcementsTitle"),
+      desc: t("announcementsDesc"),
+      Icon: Megaphone,
+    },
   ];
 
   return (
@@ -61,7 +73,7 @@ export default async function AdminHubPage({
         <h1 className="text-3xl font-semibold">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map(({ href, title, desc, Icon }) => (
           <Link key={href} href={href}>
             <Card className="h-full border-border transition hover:border-primary/40">

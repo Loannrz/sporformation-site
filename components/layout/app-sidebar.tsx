@@ -1,15 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Menu,
-  PanelLeftClose,
-  PanelRightOpen,
-  X,
-} from "lucide-react";
+import { Menu, X } from "lucide-react";
 import type { SessionUser } from "@/types";
 import { buildNavItems } from "@/components/layout/nav-config";
 import { SporformationLogo } from "@/components/logo/sporformation-logo";
@@ -23,8 +18,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const COLLAPSED_KEY = "sporformation-sidebar-collapsed";
-
 type Props = {
   user: SessionUser;
   /** Ex. messages non lus — brancher sur une source temps réel plus tard. */
@@ -33,32 +26,11 @@ type Props = {
 
 export function AppSidebar({ user, notificationCount = 0 }: Props) {
   const t = useTranslations("nav");
-  const tCommon = useTranslations("common");
   const pathname = usePathname();
   const items = buildNavItems(user);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setHydrated(true);
-    try {
-      if (localStorage.getItem(COLLAPSED_KEY) === "1") {
-        setCollapsed(true);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }, [collapsed, hydrated]);
+  /** Grand écran : barre étroite par défaut, s’élargit au survol pour afficher les libellés. */
+  const [lgRailHovered, setLgRailHovered] = useState(false);
 
   const linkCls = (active: boolean, iconOnly: boolean) =>
     cn(
@@ -185,64 +157,32 @@ export function AppSidebar({ user, notificationCount = 0 }: Props) {
           {drawerOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
         <Link href="/dashboard" className="min-w-0">
-          <SporformationLogo compact className="w-full" />
+          <SporformationLogo compact className="h-8 max-w-full" />
         </Link>
       </div>
 
       <aside
         className={cn(
-          "hidden shrink-0 border-r border-border bg-card/40 backdrop-blur lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto",
-          collapsed ? "lg:w-[4.25rem]" : "lg:w-64",
+          "hidden shrink-0 border-r border-border bg-card/40 backdrop-blur lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-x-hidden lg:overflow-y-auto",
+          "transition-[width] duration-200 ease-out",
+          lgRailHovered ? "lg:w-64" : "lg:w-[4.25rem]",
         )}
+        onMouseEnter={() => setLgRailHovered(true)}
+        onMouseLeave={() => setLgRailHovered(false)}
       >
-        <div
-          className={cn(
-            "flex items-center gap-2 border-b border-border px-3 py-4",
-            collapsed ? "flex-col" : "justify-between",
-          )}
-        >
-          {collapsed ? (
-            <Link href="/dashboard" className="flex justify-center py-1">
-              <SporformationLogo compact />
-            </Link>
-          ) : (
-            <Link href="/dashboard" className="min-w-0 flex-1 pl-1">
-              <SporformationLogo />
-            </Link>
-          )}
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="hidden shrink-0 lg:flex"
-                onClick={() => setCollapsed((c) => !c)}
-                aria-label={
-                  collapsed
-                    ? tCommon("expandSidebar")
-                    : tCommon("collapseSidebar")
-                }
-              >
-                {collapsed ? (
-                  <PanelRightOpen className="h-5 w-5" />
-                ) : (
-                  <PanelLeftClose className="h-5 w-5" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[220px]">
-              {collapsed
-                ? tCommon("expandSidebar")
-                : tCommon("collapseSidebar")}
-            </TooltipContent>
-          </Tooltip>
+        <div className="flex h-14 shrink-0 items-center border-b border-border px-3">
+          <Link
+            href="/dashboard"
+            className="flex min-h-0 min-w-0 flex-1 items-center overflow-hidden"
+          >
+            <SporformationLogo className="h-8 shrink-0" />
+          </Link>
         </div>
 
-        <NavInner iconOnly={collapsed} />
+        <NavInner iconOnly={!lgRailHovered} />
 
         <div className="mt-auto border-t border-border p-2">
-          <Footer iconOnly={collapsed} />
+          <Footer iconOnly={!lgRailHovered} />
         </div>
       </aside>
 

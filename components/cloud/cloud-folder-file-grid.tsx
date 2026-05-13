@@ -3,7 +3,10 @@
 import { FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import type { CloudFolderFileWithUrl } from "@/lib/data/school";
+import type { CloudFolderFileWithUrl, CloudStudentUploadOption } from "@/lib/data/school";
+import type { AppLocale } from "@/i18n/routing";
+import type { CloudClassSelectOption } from "./cloud-upload-document-button";
+import { CloudEditDocumentButton } from "./cloud-edit-document-button";
 
 function isImageMime(mime: string | null): boolean {
   return Boolean(mime?.toLowerCase().startsWith("image/"));
@@ -11,15 +14,33 @@ function isImageMime(mime: string | null): boolean {
 
 type Props = {
   files: CloudFolderFileWithUrl[];
+  locale: AppLocale;
+  viewerId: string;
+  viewerIsDirector: boolean;
+  classOptions: CloudClassSelectOption[];
+  studentOptions: CloudStudentUploadOption[];
+  folderSlug?: string | null;
 };
 
-export function CloudFolderFileGrid({ files }: Props) {
+export function CloudFolderFileGrid({
+  files,
+  locale,
+  viewerId,
+  viewerIsDirector,
+  classOptions,
+  studentOptions,
+  folderSlug = null,
+}: Props) {
   const t = useTranslations("cloud");
+
+  const mayEditRow = (ownerId: string | null) =>
+    viewerIsDirector || Boolean(ownerId && ownerId === viewerId);
 
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
       {files.map((f) => {
         const preview = f.signedUrl && isImageMime(f.mime);
+        const showEdit = mayEditRow(f.ownerId);
         return (
           <div
             key={f.id}
@@ -51,20 +72,86 @@ export function CloudFolderFileGrid({ files }: Props) {
                 {t("folderFileVersion", { version: f.version })}
               </p>
               {f.signedUrl ? (
-                <Button asChild size="sm" variant="secondary" className="mt-auto w-full">
-                  <a
-                    href={f.signedUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
+                <div className="mt-auto flex flex-col gap-2">
+                  <div
+                    className={
+                      showEdit
+                        ? "flex w-full gap-2"
+                        : "flex w-full flex-col gap-2"
+                    }
                   >
-                    {t("folderDownload")}
-                  </a>
-                </Button>
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="secondary"
+                      className={
+                        showEdit ? "min-w-0 flex-1" : "w-full"
+                      }
+                    >
+                      <a
+                        href={f.signedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download
+                      >
+                        {t("folderDownload")}
+                      </a>
+                    </Button>
+                    {showEdit ? (
+                      <CloudEditDocumentButton
+                        locale={locale}
+                        file={{
+                          id: f.id,
+                          title: f.title,
+                          description: f.description,
+                          classId: f.classId,
+                          studentId: f.studentId,
+                        }}
+                        classOptions={classOptions}
+                        studentOptions={studentOptions}
+                        folderSlug={folderSlug}
+                        compact
+                      />
+                    ) : null}
+                  </div>
+                </div>
               ) : (
-                <Button size="sm" variant="secondary" className="mt-auto w-full" disabled>
-                  {t("folderDownloadUnavailable")}
-                </Button>
+                <div className="mt-auto flex flex-col gap-2">
+                  <div
+                    className={
+                      showEdit
+                        ? "flex w-full gap-2"
+                        : "flex w-full flex-col gap-2"
+                    }
+                  >
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className={
+                        showEdit ? "min-w-0 flex-1" : "w-full"
+                      }
+                      disabled
+                    >
+                      {t("folderDownloadUnavailable")}
+                    </Button>
+                    {showEdit ? (
+                      <CloudEditDocumentButton
+                        locale={locale}
+                        file={{
+                          id: f.id,
+                          title: f.title,
+                          description: f.description,
+                          classId: f.classId,
+                          studentId: f.studentId,
+                        }}
+                        classOptions={classOptions}
+                        studentOptions={studentOptions}
+                        folderSlug={folderSlug}
+                        compact
+                      />
+                    ) : null}
+                  </div>
+                </div>
               )}
             </div>
           </div>

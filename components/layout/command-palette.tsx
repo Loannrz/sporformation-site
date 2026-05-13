@@ -7,9 +7,12 @@ import { useTranslations } from "next-intl";
 import type { SessionUser } from "@/types";
 import { buildNavItems } from "@/components/layout/nav-config";
 import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { hasPermission } from "@/lib/permissions";
 import type { LucideIcon } from "lucide-react";
 import {
+  CalendarDays,
   GraduationCap,
+  Megaphone,
   School,
   Settings,
   UserRound,
@@ -46,6 +49,8 @@ export function CommandPalette({ user, open, onOpenChange }: Props) {
     href: string;
     labelKey:
       | "adminAccounts"
+      | "adminAnnouncements"
+      | "adminCalendar"
       | "adminClasses"
       | "adminStudents";
     Icon: LucideIcon;
@@ -56,6 +61,18 @@ export function CommandPalette({ user, open, onOpenChange }: Props) {
       href: "/admin/users",
       labelKey: "adminAccounts",
       Icon: Users,
+    });
+    if (hasPermission(user, "CREATE_ANNOUNCEMENTS")) {
+      adminDeepItems.push({
+        href: "/admin/announcements",
+        labelKey: "adminAnnouncements",
+        Icon: Megaphone,
+      });
+    }
+    adminDeepItems.push({
+      href: "/admin/calendar",
+      labelKey: "adminCalendar",
+      Icon: CalendarDays,
     });
     adminDeepItems.push({
       href: "/admin/students",

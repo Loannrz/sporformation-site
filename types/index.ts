@@ -80,6 +80,13 @@ export interface Sanction {
 
 export type AnnouncementImportance = "normal" | "urgent";
 
+/** Public cible pour l’affichage sur le tableau de bord et la page Annonces. */
+export type AnnouncementAudience =
+  | "ALL_STAFF"
+  | "DIRECTION_ONLY"
+  | "HEAD_TEACHERS_ONLY"
+  | "CLASSROOM_TEACHERS";
+
 export interface Announcement {
   id: string;
   title: string;
@@ -88,18 +95,43 @@ export interface Announcement {
   createdAt: string;
   importance: AnnouncementImportance;
   authorId: string;
+  audience: AnnouncementAudience;
+  /** Clé parmi les logos prédéfinis côté app. */
+  logoKey: string;
+  /** Teinte de carte : slate, emerald, rose, sky, amber, violet, orange. */
+  accentKey: string;
 }
 
 export type CalendarEventType = "course" | "meeting" | "school_event" | "deadline";
 
+/** Audience des événements partagés (aligné annonces + ciblage précis). */
+export type CalendarSharedAudience =
+  | "ALL_STAFF"
+  | "CLASSROOM_TEACHERS"
+  | "HEAD_TEACHERS_ONLY"
+  | "DIRECTION_ONLY"
+  | "SPECIFIC_TARGETS";
+
+export interface CalendarEventTarget {
+  type: "profile" | "class" | "student";
+  id: string;
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
+  description: string | null;
+  /** ISO timestamps */
   start: string;
   end: string;
   type: CalendarEventType;
-  classId?: string;
-  teacherId?: string;
+  personal: boolean;
+  /** Qui a créé l’entrée */
+  createdBy: string | null;
+  audience: CalendarSharedAudience | null;
+  classId?: string | null;
+  teacherId?: string | null;
+  targets?: CalendarEventTarget[];
 }
 
 /** Clés alignées avec le tableau fonctionnel dans la spec SPORFORMATION. */
