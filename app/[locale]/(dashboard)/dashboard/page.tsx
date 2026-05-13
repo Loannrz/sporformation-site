@@ -203,7 +203,7 @@ export default async function DashboardPage({
             )}
             {directorExtras && (
               <p className="text-xs text-muted-foreground">
-                Publication des annonces depuis Supabase ou /administration.
+                Publication des annonces depuis Supabase ou /admin.
               </p>
             )}
           </CardContent>

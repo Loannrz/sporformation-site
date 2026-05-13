@@ -31,7 +31,7 @@ export default async function AdminRolesPage({
 
   return (
     <div className="space-y-8">
-      <AdminBackLink href="/administration" label={t("backToAdmin")} />
+      <AdminBackLink href="/admin" label={t("backToAdmin")} />
       <div>
         <h1 className="text-3xl font-semibold">{t("rolesTitle")}</h1>
         <p className="text-muted-foreground">{t("orgHint")}</p>
