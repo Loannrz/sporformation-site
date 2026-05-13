@@ -184,3 +184,77 @@ create policy "upsert own profile" on public.profiles
   for insert with check (auth.uid() = id);
 
 -- Bucket Storage « documents » à créer dans Supabase (max 50Mo, filtrage MIME dans l’application).
+
+-- Politiques staff (intranet) : un utilisateur authentifié avec une ligne `profiles` peut lire/écrire.
+-- Affinez par base_role en production (directeur seulement pour certaines tables).
+
+create policy "staff select profiles" on public.profiles
+  for select using (auth.uid() is not null);
+
+create policy "staff update own profile row" on public.profiles
+  for update using (auth.uid() = id);
+
+create policy "staff select classes" on public.classes
+  for select using (auth.uid() is not null);
+
+create policy "staff write classes" on public.classes
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "staff select students" on public.students
+  for select using (auth.uid() is not null);
+
+create policy "staff write students" on public.students
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "staff select sanctions" on public.sanctions
+  for select using (auth.uid() is not null);
+
+create policy "staff insert sanctions" on public.sanctions
+  for insert with check (auth.uid() is not null);
+
+create policy "staff update sanctions" on public.sanctions
+  for update using (auth.uid() is not null);
+
+create policy "staff select announcements" on public.announcements
+  for select using (auth.uid() is not null);
+
+create policy "staff insert announcements" on public.announcements
+  for insert with check (auth.uid() is not null);
+
+create policy "staff select calendar_events" on public.calendar_events
+  for select using (auth.uid() is not null);
+
+create policy "staff write calendar_events" on public.calendar_events
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "staff select conversations" on public.conversations
+  for select using (auth.uid() is not null);
+
+create policy "staff write conversations" on public.conversations
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "staff select messages" on public.messages
+  for select using (auth.uid() is not null);
+
+create policy "staff write messages" on public.messages
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "staff select files" on public.files
+  for select using (auth.uid() is not null);
+
+create policy "staff write files" on public.files
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "staff select custom_roles" on public.custom_roles
+  for select using (auth.uid() is not null);
+
+create policy "staff write custom_roles" on public.custom_roles
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+alter table public.role_assignments enable row level security;
+
+create policy "staff read role_assignments" on public.role_assignments
+  for select using (auth.uid() is not null);
+
+create policy "staff write role_assignments" on public.role_assignments
+  for all using (auth.uid() is not null) with check (auth.uid() is not null);

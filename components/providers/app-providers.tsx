@@ -11,7 +11,11 @@ type Props = {
 
 export function AppProviders({ children, locale, messages }: Props) {
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider
+      locale={locale}
+      messages={messages}
+      timeZone="Europe/Paris"
+    >
       <ThemeProvider
         attribute="class"
         defaultTheme="light"

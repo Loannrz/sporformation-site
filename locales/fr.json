@@ -25,14 +25,32 @@
   "auth": {
     "title": "Connexion sécurisée",
     "subtitle": "Espace interne SPORFORMATION",
-    "demoTitle": "Mode démo développement",
-    "demoSubtitle": "Sélectionnez un rôle pour tester les interfaces. À retirer quand Supabase Auth est activé.",
-    "signInDirector": "Se connecter en directeur",
-    "signInPrincipal": "Se connecter en prof principal",
-    "signInTeacher": "Se connecter en professeur",
+    "email": "Email",
+    "password": "Mot de passe",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe",
+    "signIn": "Se connecter",
     "logout": "Déconnexion",
     "brandedFooter": "Réservé au personnel.",
-    "invitationNote": "En production : invitation email + lien et mot de passe."
+    "invitationNote": "Compte créé dans Supabase : Auth + ligne `profiles` avec le même id.",
+    "errorConfig": "Variables Supabase manquantes (NEXT_PUBLIC_SUPABASE_URL / ANON_KEY).",
+    "errorBadUrl": "Le projet Supabase est injoignable (souvent : Project URL incorrect, projet supprimé, ou DNS bloqué). Dashboard → Settings → API : copiez l'URL « Project URL » (https://xxxx.supabase.co) et la clé « anon » du même projet dans .env.local, puis redémarrez npm run dev. Test rapide : cette URL doit s'ouvrir dans le navigateur.",
+    "errorNeedProfile": "Connexion Auth réussie, mais aucune ligne dans la table « profiles » pour votre utilisateur. Dans Supabase : Table Editor → profiles → ajoutez une ligne dont la colonne id est exactement l'UUID de Authentication → Users. Renseignez au minimum first_name, last_name et base_role (DIRECTEUR, PROF_PRINCIPAL ou PROFESSEUR). Ensuite rechargez cette page.",
+    "clearSession": "Se déconnecter (effacer la session)",
+    "errorGeneric": "Connexion impossible. Réessayez ou contactez l’administrateur.",
+    "devDetailLabel": "Détail technique (dev)",
+    "errors": {
+      "EMAIL_REQUIRED": "Indiquez votre adresse e-mail.",
+      "INVALID_EMAIL_FORMAT": "Format d’e-mail invalide (ex. nom@ecole.fr).",
+      "PASSWORD_REQUIRED": "Indiquez votre mot de passe.",
+      "INVALID_CREDENTIALS": "E-mail ou mot de passe incorrect.",
+      "EMAIL_NOT_CONFIRMED": "Compte non confirmé. Vérifiez votre boîte mail ou demandez un nouveau lien depuis Supabase.",
+      "RATE_LIMITED": "Trop de tentatives. Patientez quelques minutes puis réessayez.",
+      "ACCOUNT_BLOCKED": "Ce compte n’est pas accessible. Contactez l’administrateur.",
+      "CONFIG": "Configuration Supabase incomplète (URL ou clé anon manquante).",
+      "BAD_URL": "Le projet Supabase est injoignable (URL du projet incorrecte ou réseau). Dashboard → Settings → API : copiez l'URL « Project URL » et la clé anon du même projet, puis redémarrez npm run dev.",
+      "GENERIC": "Connexion impossible. Vérifiez vos identifiants ou réessayez plus tard."
+    }
   },
   "nav": {
     "dashboard": "Tableau de bord",

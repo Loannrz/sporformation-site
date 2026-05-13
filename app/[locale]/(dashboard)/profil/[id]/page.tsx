@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { allStaff } from "@/lib/mock-data";
-import { readSessionCookie } from "@/lib/session-server";
+import { getSessionUser } from "@/lib/session-server";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import { getTranslations } from "next-intl/server";
@@ -19,7 +19,7 @@ export default async function ProfilePage({
 }: {
   params: { locale: AppLocale; id: string };
 }) {
-  const viewer = await readSessionCookie();
+  const viewer = await getSessionUser();
   const staff = allStaff.find((s) => s.id === params.id);
   if (!viewer || !staff) {
     notFound();

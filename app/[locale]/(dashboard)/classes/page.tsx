@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MOCK_CLASSES } from "@/lib/mock-data";
+import { fetchClassesWithStudents } from "@/lib/data/school";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -14,6 +14,7 @@ export default async function ClassesPage({
 }: {
   params: { locale: AppLocale };
 }) {
+  const classes = await fetchClassesWithStudents();
   const tClasses = await getTranslations({
     locale: params.locale,
     namespace: "classes",
@@ -24,11 +25,11 @@ export default async function ClassesPage({
       <div>
         <h1 className="text-3xl font-semibold">{tClasses("title")}</h1>
         <p className="text-muted-foreground">
-          {tClasses("subtitle", { count: MOCK_CLASSES.length })}
+          {tClasses("subtitle", { count: classes.length })}
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {MOCK_CLASSES.map((c) => (
+        {classes.map((c) => (
           <Card
             key={c.id}
             className="border-border bg-card transition hover:border-primary/30"

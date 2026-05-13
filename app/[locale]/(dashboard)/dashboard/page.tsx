@@ -8,15 +8,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  MOCK_ANNOUNCEMENTS,
-  MOCK_CLASSES,
-  MOCK_SANCTIONS,
-  MOCK_STUDENTS,
-  allStaff,
-  fileStats,
-} from "@/lib/mock-data";
+  countClasses,
+  countFiles,
+  countStaffProfiles,
+  countStudents,
+  fetchAnnouncements,
+  fetchClassesWithStudents,
+  fetchRecentSanctionsForUser,
+} from "@/lib/data/school";
 import { hasPermission } from "@/lib/permissions";
-import { readSessionCookie } from "@/lib/session-server";
+import { getSessionUser } from "@/lib/session-server";
 import { format } from "date-fns";
 import { fr as frLocale, enUS } from "date-fns/locale";
 import { getTranslations } from "next-intl/server";
@@ -27,7 +28,7 @@ export default async function DashboardPage({
 }: {
   params: { locale: AppLocale };
 }) {
-  const user = await readSessionCookie();
+  const user = await getSessionUser();
   const t = await getTranslations({
     locale: params.locale,
     namespace: "dashboard",
@@ -44,9 +45,27 @@ export default async function DashboardPage({
   }
 
   const directorExtras = hasPermission(user, "VIEW_DIRECTOR_DASHBOARD");
-  const stats = fileStats();
+  const [
+    announcements,
+    sanctionsPreview,
+    staffCount,
+    studentCount,
+    classCount,
+    fileCount,
+    classesIndex,
+  ] = await Promise.all([
+    fetchAnnouncements(),
+    fetchRecentSanctionsForUser(user, 4),
+    directorExtras ? countStaffProfiles() : Promise.resolve(0),
+    directorExtras ? countStudents() : Promise.resolve(0),
+    directorExtras ? countClasses() : Promise.resolve(0),
+    directorExtras ? countFiles() : Promise.resolve(0),
+    fetchClassesWithStudents(),
+  ]);
 
-  const announcements = [...MOCK_ANNOUNCEMENTS].sort((a, b) => {
+  const classNameById = new Map(classesIndex.map((c) => [c.id, c.name]));
+
+  const sortedAnnouncements = [...announcements].sort((a, b) => {
     if (a.importance === b.importance) {
       return (
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -55,17 +74,8 @@ export default async function DashboardPage({
     return a.importance === "urgent" ? -1 : 1;
   });
 
-  const sanctionsPreview = MOCK_SANCTIONS.slice(0, 4);
   const classScope =
     user.role === "PROF_PRINCIPAL" ? user.principalClassIds ?? [] : [];
-
-  const scopedSanctions =
-    user.role === "PROF_PRINCIPAL"
-      ? MOCK_SANCTIONS.filter((s) => {
-          const stu = MOCK_STUDENTS.find((st) => st.id === s.studentId);
-          return stu ? classScope.includes(stu.classId) : false;
-        }).slice(0, 4)
-      : sanctionsPreview;
 
   return (
     <div className="space-y-10">
@@ -84,16 +94,10 @@ export default async function DashboardPage({
 
       {directorExtras && (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label={t("statsTeachers")}
-            value={`${allStaff.length}`}
-          />
-          <StatCard
-            label={t("statsStudents")}
-            value={`${MOCK_CLASSES.reduce((a, c) => a + c.studentIds.length, 0)}`}
-          />
-          <StatCard label={t("statsClasses")} value={`${MOCK_CLASSES.length}`} />
-          <StatCard label={t("statsFiles")} value={`${stats.total}`} />
+          <StatCard label={t("statsTeachers")} value={`${staffCount}`} />
+          <StatCard label={t("statsStudents")} value={`${studentCount}`} />
+          <StatCard label={t("statsClasses")} value={`${classCount}`} />
+          <StatCard label={t("statsFiles")} value={`${fileCount}`} />
         </section>
       )}
 
@@ -112,7 +116,7 @@ export default async function DashboardPage({
               {classScope.map((cid) => (
                 <Link key={cid} href={`/classes/${cid}`}>
                   <Badge variant="outline" className="cursor-pointer px-3 py-1">
-                    {MOCK_CLASSES.find((c) => c.id === cid)?.name ?? cid}
+                    {classNameById.get(cid) ?? cid}
                   </Badge>
                 </Link>
               ))}
@@ -131,28 +135,31 @@ export default async function DashboardPage({
             <Badge variant="accent">Live</Badge>
           </CardHeader>
           <CardContent className="space-y-4">
-            {(user.role === "PROF_PRINCIPAL" ? scopedSanctions : sanctionsPreview).map(
-              (s) => (
-                <div
-                  key={s.id}
-                  className="flex flex-col gap-2 rounded-lg border border-border/80 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <p className="text-sm font-semibold">{s.type}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(s.date), "PPp", { locale: dateLocale })}
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                      {s.description}
-                    </p>
-                  </div>
-                  <Badge
-                    variant={s.status === "active" ? "default" : "secondary"}
-                  >
-                    {s.status}
-                  </Badge>
+            {sanctionsPreview.map((s) => (
+              <div
+                key={s.id}
+                className="flex flex-col gap-2 rounded-lg border border-border/80 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{s.type}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(s.date), "PPp", { locale: dateLocale })}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                    {s.description}
+                  </p>
                 </div>
-              ),
+                <Badge
+                  variant={s.status === "active" ? "default" : "secondary"}
+                >
+                  {s.status}
+                </Badge>
+              </div>
+            ))}
+            {sanctionsPreview.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Aucune sanction récente.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -165,7 +172,7 @@ export default async function DashboardPage({
             <CardDescription>{tAnnounce("subtitle")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            {announcements.map((a) => (
+            {sortedAnnouncements.map((a) => (
               <article
                 key={a.id}
                 className="rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm transition hover:border-primary/35"
@@ -189,9 +196,14 @@ export default async function DashboardPage({
                 />
               </article>
             ))}
+            {sortedAnnouncements.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Aucune annonce pour le moment.
+              </p>
+            )}
             {directorExtras && (
               <p className="text-xs text-muted-foreground">
-                Accès édition depuis /administration (flux Supabase).
+                Publication des annonces depuis Supabase ou /administration.
               </p>
             )}
           </CardContent>

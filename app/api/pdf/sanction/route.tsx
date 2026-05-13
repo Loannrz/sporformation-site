@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { MOCK_CLASSES, MOCK_SANCTIONS, MOCK_STUDENTS } from "@/lib/mock-data";
+import { fetchClassById, fetchSanRawById } from "@/lib/data/school";
+import { canDownloadSanctionPdf } from "@/lib/permissions";
+import { getSessionUser } from "@/lib/session-server";
 import { SanctionOfficialPdf } from "@/lib/pdf/sanction-official";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -15,16 +17,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "missing id" }, { status: 400 });
   }
 
-  const sanction = MOCK_SANCTIONS.find((s) => s.id === id);
-  const student = sanction
-    ? MOCK_STUDENTS.find((stu) => stu.id === sanction.studentId)
-    : undefined;
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
 
-  if (!sanction || !student) {
+  const bundle = await fetchSanRawById(id);
+  if (!bundle) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const cls = MOCK_CLASSES.find((c) => c.id === student.classId);
+  const { sanction, student } = bundle;
+  if (!canDownloadSanctionPdf(user, student.classId)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const cls = student.classId
+    ? await fetchClassById(student.classId)
+    : null;
 
   const stamp = await renderToBuffer(
     <SanctionOfficialPdf
@@ -34,7 +44,9 @@ export async function GET(request: NextRequest) {
       studentLast={student.lastName}
       classNameLabel={cls?.name ?? "—"}
       sanctionTypeLabel={sanction.type}
-      dateLabel={new Date(sanction.date).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")}
+      dateLabel={new Date(sanction.date).toLocaleString(
+        locale === "fr" ? "fr-FR" : "en-US",
+      )}
       description={sanction.description}
       authorName={sanction.authorName}
     />,

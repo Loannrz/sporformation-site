@@ -1,5 +1,6 @@
 import { redirect } from "@/i18n/navigation";
-import { devSignIn } from "@/app/actions/auth";
+import { signOutAction } from "@/app/actions/auth";
+import { LoginForm } from "@/components/auth/login-form";
 import { SporformationLogo } from "@/components/logo/sporformation-logo";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,19 +11,42 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { AppLocale } from "@/i18n/routing";
-import { readSessionCookie } from "@/lib/session-server";
+import { getSupabaseConnectionConfig } from "@/lib/supabase/env";
+import { getSessionUser } from "@/lib/session-server";
 import { getTranslations } from "next-intl/server";
+
+function resolveLoginError(
+  code: string | undefined,
+  t: Awaited<ReturnType<typeof getTranslations>>,
+) {
+  if (!code) return null;
+  if (code === "config") return t("errorConfig");
+  if (code === "badurl") return t("errorBadUrl");
+  if (code === "need_profile") return t("errorNeedProfile");
+  try {
+    const decoded = decodeURIComponent(code);
+    if (!decoded || decoded === "NEXT_REDIRECT") return t("errorGeneric");
+    return decoded;
+  } catch {
+    return t("errorGeneric");
+  }
+}
 
 export default async function LoginPage({
   params,
+  searchParams,
 }: {
   params: { locale: AppLocale };
+  searchParams?: { error?: string };
 }) {
-  const user = await readSessionCookie();
+  const user = await getSessionUser();
   if (user) {
     redirect({ href: "/dashboard", locale: params.locale });
   }
   const t = await getTranslations({ locale: params.locale, namespace: "auth" });
+  const errorMessage = resolveLoginError(searchParams?.error, t);
+  const { url: sbUrl, anonKey: sbAnon } = getSupabaseConnectionConfig();
+  const showEnvMissing = !sbUrl || !sbAnon;
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-16">
@@ -39,44 +63,23 @@ export default async function LoginPage({
             <CardDescription>{t("subtitle")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">{t("demoTitle")}</p>
-              <p className="mt-1">{t("demoSubtitle")}</p>
-            </div>
+            {showEnvMissing ? (
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+                {t("errorConfig")}
+              </p>
+            ) : null}
 
-            <div className="grid gap-3">
-              <form action={devSignIn} className="w-full">
+            <LoginForm locale={params.locale} urlErrorMessage={errorMessage} />
+
+            {searchParams?.error === "need_profile" ? (
+              <form action={signOutAction} className="flex justify-center">
                 <input type="hidden" name="locale" value={params.locale} />
-                <input type="hidden" name="role" value="DIRECTEUR" />
-                <Button type="submit" className="h-11 w-full" size="lg">
-                  {t("signInDirector")}
+                <Button type="submit" variant="outline" size="sm">
+                  {t("clearSession")}
                 </Button>
               </form>
-              <form action={devSignIn} className="w-full">
-                <input type="hidden" name="locale" value={params.locale} />
-                <input type="hidden" name="role" value="PROF_PRINCIPAL" />
-                <Button
-                  type="submit"
-                  variant="accent"
-                  className="h-11 w-full"
-                  size="lg"
-                >
-                  {t("signInPrincipal")}
-                </Button>
-              </form>
-              <form action={devSignIn} className="w-full">
-                <input type="hidden" name="locale" value={params.locale} />
-                <input type="hidden" name="role" value="PROFESSEUR" />
-                <Button
-                  type="submit"
-                  variant="secondary"
-                  className="h-11 w-full"
-                  size="lg"
-                >
-                  {t("signInTeacher")}
-                </Button>
-              </form>
-            </div>
+            ) : null}
+
             <p className="text-center text-[11px] text-muted-foreground">
               {t("invitationNote")}
             </p>

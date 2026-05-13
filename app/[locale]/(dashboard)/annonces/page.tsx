@@ -6,9 +6,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MOCK_ANNOUNCEMENTS } from "@/lib/mock-data";
+import { fetchAnnouncements } from "@/lib/data/school";
 import { hasPermission } from "@/lib/permissions";
-import { readSessionCookie } from "@/lib/session-server";
+import { getSessionUser } from "@/lib/session-server";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import { getTranslations } from "next-intl/server";
@@ -19,7 +19,7 @@ export default async function AnnouncementsPage({
 }: {
   params: { locale: AppLocale };
 }) {
-  const user = await readSessionCookie();
+  const user = await getSessionUser();
   const t = await getTranslations({
     locale: params.locale,
     namespace: "announcements",
@@ -27,7 +27,8 @@ export default async function AnnouncementsPage({
   const dateLocale = params.locale === "fr" ? fr : enUS;
   const canCreate = user && hasPermission(user, "CREATE_ANNOUNCEMENTS");
 
-  const items = [...MOCK_ANNOUNCEMENTS].sort((a, b) => {
+  const raw = await fetchAnnouncements();
+  const items = [...raw].sort((a, b) => {
     if (a.importance === b.importance) {
       return (
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()

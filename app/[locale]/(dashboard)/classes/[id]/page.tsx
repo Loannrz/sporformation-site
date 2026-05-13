@@ -9,11 +9,11 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  MOCK_CLASSES,
-  MOCK_SANCTIONS,
-  MOCK_STUDENTS,
-  allStaff,
-} from "@/lib/mock-data";
+  fetchClassById,
+  fetchProfileById,
+  fetchSanctionsForClassStudents,
+  fetchStudentsForClass,
+} from "@/lib/data/school";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import { getTranslations } from "next-intl/server";
@@ -24,7 +24,7 @@ export default async function ClassDetailPage({
 }: {
   params: { locale: AppLocale; id: string };
 }) {
-  const cls = MOCK_CLASSES.find((c) => c.id === params.id);
+  const cls = await fetchClassById(params.id);
   if (!cls) {
     notFound();
   }
@@ -36,14 +36,12 @@ export default async function ClassDetailPage({
   const locale = params.locale === "fr" ? fr : enUS;
 
   const principal = cls.principalId
-    ? allStaff.find((s) => s.id === cls.principalId)
-    : undefined;
+    ? await fetchProfileById(cls.principalId)
+    : null;
 
-  const students = MOCK_STUDENTS.filter((s) => s.classId === cls.id);
-
-  const classSanctions = MOCK_SANCTIONS.filter((s) =>
-    students.some((stu) => stu.id === s.studentId),
-  ).slice(0, 10);
+  const students = await fetchStudentsForClass(cls.id);
+  const studentIds = students.map((s) => s.id);
+  const classSanctions = await fetchSanctionsForClassStudents(studentIds, 10);
 
   return (
     <div className="space-y-10">

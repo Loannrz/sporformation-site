@@ -25,14 +25,32 @@
   "auth": {
     "title": "Secure sign-in",
     "subtitle": "SPORFORMATION intranet",
-    "demoTitle": "Development demo mode",
-    "demoSubtitle": "Pick a persona to browse the UX. Remove when Supabase Auth is enabled.",
-    "signInDirector": "Sign in as director",
-    "signInPrincipal": "Sign in as head teacher",
-    "signInTeacher": "Sign in as teacher",
+    "email": "Email",
+    "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "signIn": "Sign in",
     "logout": "Sign out",
     "brandedFooter": "Staff-only.",
-    "invitationNote": "In production: emailed invite links and passwords."
+    "invitationNote": "Create the user in Supabase Auth and a matching `profiles` row (same id).",
+    "errorConfig": "Missing Supabase env vars (NEXT_PUBLIC_SUPABASE_URL / ANON_KEY).",
+    "errorBadUrl": "Your Supabase project is unreachable (wrong Project URL, deleted project, or DNS/network blocking). In the dashboard: Settings → API, copy the “Project URL” (https://xxxx.supabase.co) and the anon key from the same project into .env.local, then restart npm run dev. Quick check: that URL should load in a browser.",
+    "errorNeedProfile": "You are signed in to Auth, but there is no row in table `profiles` for your user. In Supabase: Table Editor → profiles → add a row where id equals the UUID from Authentication → Users. Set at least first_name, last_name, and base_role (DIRECTEUR, PROF_PRINCIPAL, or PROFESSEUR). Then refresh this page.",
+    "clearSession": "Sign out (clear session)",
+    "errorGeneric": "Sign-in failed. Try again or contact your administrator.",
+    "devDetailLabel": "Technical detail (dev)",
+    "errors": {
+      "EMAIL_REQUIRED": "Enter your email address.",
+      "INVALID_EMAIL_FORMAT": "Invalid email format (e.g. name@school.edu).",
+      "PASSWORD_REQUIRED": "Enter your password.",
+      "INVALID_CREDENTIALS": "Incorrect email or password.",
+      "EMAIL_NOT_CONFIRMED": "Email not confirmed. Check your inbox or resend confirmation from Supabase.",
+      "RATE_LIMITED": "Too many attempts. Wait a few minutes and try again.",
+      "ACCOUNT_BLOCKED": "This account cannot sign in. Contact an administrator.",
+      "CONFIG": "Supabase configuration is incomplete (missing URL or anon key).",
+      "BAD_URL": "Your Supabase project is unreachable (wrong URL or network). Dashboard → Settings → API: copy the Project URL and matching anon key, then restart npm run dev.",
+      "GENERIC": "Sign-in failed. Check your credentials or try again later."
+    }
   },
   "nav": {
     "dashboard": "Dashboard",

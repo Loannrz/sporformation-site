@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { allStaff } from "@/lib/mock-data";
-import { readSessionCookie } from "@/lib/session-server";
+import { getSessionUser } from "@/lib/session-server";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -10,7 +10,7 @@ export default async function AdminAccountsPage({
 }: {
   params: { locale: AppLocale };
 }) {
-  const user = await readSessionCookie();
+  const user = await getSessionUser();
   if (!user || user.role !== "DIRECTEUR") {
     notFound();
   }

@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/card";
 import { retireSanctionAction } from "@/app/actions/sanctions";
 import {
-  MOCK_CLASSES,
-  MOCK_SANCTIONS,
-  MOCK_STUDENTS,
-} from "@/lib/mock-data";
+  fetchClassById,
+  fetchSanctionsForStudent,
+  fetchStudentById,
+} from "@/lib/data/school";
 import {
   canDownloadSanctionPdf,
   canRemoveSanction,
@@ -22,7 +22,7 @@ import {
   hasPermission,
   sanctionsForStudentProfile,
 } from "@/lib/permissions";
-import { readSessionCookie } from "@/lib/session-server";
+import { getSessionUser } from "@/lib/session-server";
 import type { AppLocale } from "@/i18n/routing";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
@@ -33,8 +33,8 @@ export default async function StudentProfilePage({
 }: {
   params: { locale: AppLocale; id: string };
 }) {
-  const user = await readSessionCookie();
-  const student = MOCK_STUDENTS.find((s) => s.id === params.id);
+  const user = await getSessionUser();
+  const student = await fetchStudentById(params.id);
   if (!student || !user) {
     notFound();
   }
@@ -48,12 +48,15 @@ export default async function StudentProfilePage({
     namespace: "sanctions",
   });
   const dateLocale = params.locale === "fr" ? fr : enUS;
-  const clazz = MOCK_CLASSES.find((c) => c.id === student.classId);
+  const clazz = student.classId
+    ? await fetchClassById(student.classId)
+    : null;
 
+  const dbSanctions = await fetchSanctionsForStudent(student.id);
   const sanctions = sanctionsForStudentProfile(
     user,
     student.classId,
-    MOCK_SANCTIONS.filter((s) => s.studentId === student.id),
+    dbSanctions,
   );
 
   const canPdf = canDownloadSanctionPdf(user, student.classId);
@@ -68,7 +71,7 @@ export default async function StudentProfilePage({
           })}
         </h1>
         <p className="text-muted-foreground">
-          {clazz?.name} · {student.email}
+          {clazz?.name ?? "—"} · {student.email}
         </p>
       </div>
 
@@ -81,7 +84,9 @@ export default async function StudentProfilePage({
             <p>
               Entrée :{" "}
               {student.entryDate
-                ? format(new Date(student.entryDate), "PP", { locale: dateLocale })
+                ? format(new Date(student.entryDate), "PP", {
+                    locale: dateLocale,
+                  })
                 : "—"}
             </p>
             <p className="text-muted-foreground">{tStudent("inactiveLogin")}</p>
@@ -114,7 +119,9 @@ export default async function StudentProfilePage({
                           {tSanctions(`types.${s.type}`)}
                         </p>
                         <Badge
-                          variant={s.status === "active" ? "default" : "secondary"}
+                          variant={
+                            s.status === "active" ? "default" : "secondary"
+                          }
                           className="capitalize"
                         >
                           {s.status === "active"
@@ -136,17 +143,17 @@ export default async function StudentProfilePage({
                             user.principalClassIds?.includes(
                               student.classId,
                             ))) && (
-                        <p className="mt-2 text-xs italic text-muted-foreground">
-                          {tSanctions("retiredMeta", {
-                            name: s.retiredByName ?? "—",
-                            date: format(
-                              new Date(s.retiredAt ?? s.date),
-                              "PP pp",
-                              { locale: dateLocale },
-                            ),
-                          })}
-                        </p>
-                      )}
+                          <p className="mt-2 text-xs italic text-muted-foreground">
+                            {tSanctions("retiredMeta", {
+                              name: s.retiredByName ?? "—",
+                              date: format(
+                                new Date(s.retiredAt ?? s.date),
+                                "PP pp",
+                                { locale: dateLocale },
+                              ),
+                            })}
+                          </p>
+                        )}
                     </div>
                     <div className="flex flex-col gap-2 sm:items-end">
                       {canPdf && (

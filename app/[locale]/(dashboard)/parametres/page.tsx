@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import ThemeToggleCards from "@/components/settings/theme-toggle-cards";
 
-import { readSessionCookie } from "@/lib/session-server";
+import { getSessionUser } from "@/lib/session-server";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -18,7 +18,7 @@ export default async function SettingsPage({
 }: {
   params: { locale: AppLocale };
 }) {
-  const user = await readSessionCookie();
+  const user = await getSessionUser();
   const t = await getTranslations({
     locale: params.locale,
     namespace: "settings",

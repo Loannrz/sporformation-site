@@ -2,14 +2,14 @@ import { getTranslations } from "next-intl/server";
 import { CloudExplorer } from "@/components/cloud/cloud-explorer";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AppLocale } from "@/i18n/routing";
-import { readSessionCookie } from "@/lib/session-server";
+import { getSessionUser } from "@/lib/session-server";
 
 export default async function CloudPage({
   params,
 }: {
   params: { locale: AppLocale };
 }) {
-  const user = await readSessionCookie();
+  const user = await getSessionUser();
   const t = await getTranslations({
     locale: params.locale,
     namespace: "cloud",

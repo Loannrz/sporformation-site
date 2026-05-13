@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { OrgChartPlanner } from "@/components/admin/org-chart-planner";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOCK_CUSTOM_ROLES } from "@/lib/mock-data";
-import { readSessionCookie } from "@/lib/session-server";
+import { getSessionUser } from "@/lib/session-server";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -11,7 +11,7 @@ export default async function AdminRolesPage({
 }: {
   params: { locale: AppLocale };
 }) {
-  const user = await readSessionCookie();
+  const user = await getSessionUser();
   if (!user || user.role !== "DIRECTEUR") {
     notFound();
   }

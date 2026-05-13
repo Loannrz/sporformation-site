@@ -1,21 +1,38 @@
-import { SESSION_COOKIE_NAME } from "@/lib/constants";
-import { cookies } from "next/headers";
-import type { SessionUser } from "@/types";
+import { createServerSupabase } from "@/lib/supabase/server";
+import type { SessionUser, UserRole } from "@/types";
 
-export { SESSION_COOKIE_NAME };
+export async function getSessionUser(): Promise<SessionUser | null> {
+  const supabase = await createServerSupabase();
+  if (!supabase) return null;
 
-export async function readSessionCookie(): Promise<SessionUser | null> {
-  const jar = cookies();
-  const raw = jar.get(SESSION_COOKIE_NAME)?.value;
-  if (!raw) return null;
-  try {
-    const json = Buffer.from(raw, "base64url").toString("utf8");
-    return JSON.parse(json) as SessionUser;
-  } catch {
-    return null;
-  }
-}
+  const {
+    data: { user },
+    error: authErr,
+  } = await supabase.auth.getUser();
+  if (authErr || !user) return null;
 
-export function encodeSessionUser(user: SessionUser): string {
-  return Buffer.from(JSON.stringify(user), "utf8").toString("base64url");
+  const { data: profile, error: profileErr } = await supabase
+    .from("profiles")
+    .select(
+      "first_name,last_name,email,avatar_url,bio,joined_at,base_role,principal_class_ids,subjects",
+    )
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileErr || !profile) return null;
+
+  return {
+    id: user.id,
+    email: profile.email ?? user.email ?? "",
+    firstName: profile.first_name,
+    lastName: profile.last_name,
+    role: profile.base_role as UserRole,
+    avatarUrl: profile.avatar_url ?? undefined,
+    bio: profile.bio ?? undefined,
+    subjects: profile.subjects ?? undefined,
+    joinedAt: profile.joined_at
+      ? new Date(profile.joined_at as string).toISOString().slice(0, 10)
+      : undefined,
+    principalClassIds: (profile.principal_class_ids as string[] | null) ?? [],
+  };
 }
