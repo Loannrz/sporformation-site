@@ -11,7 +11,7 @@ import { redirectToAccessDenied } from "@/lib/guards";
 import { Link, redirect } from "@/i18n/navigation";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
-import { ScrollText, Users, BookOpen, School, Share2 } from "lucide-react";
+import { Users, School, GraduationCap } from "lucide-react";
 
 export default async function AdminHubPage({
   params,
@@ -42,28 +42,16 @@ export default async function AdminHubPage({
       Icon: Users,
     },
     {
-      href: "/admin/formations",
-      title: t("programsTitle"),
-      desc: t("programsDesc"),
-      Icon: BookOpen,
-    },
-    {
-      href: "/admin/logs",
-      title: t("logsTitle"),
-      desc: t("logsDesc"),
-      Icon: ScrollText,
-    },
-    {
-      href: "/administration/roles",
-      title: t("orgTitle"),
-      desc: t("orgDesc"),
-      Icon: Share2,
-    },
-    {
       href: "/administration/classes",
       title: t("classesTitle"),
       desc: t("classesDesc"),
       Icon: School,
+    },
+    {
+      href: "/admin/students",
+      title: t("studentsTitle"),
+      desc: t("studentsDesc"),
+      Icon: GraduationCap,
     },
   ];
 

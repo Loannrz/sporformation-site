@@ -1,5 +1,6 @@
 "use client";
 
+import { adminClassOptionLabel } from "@/lib/academic-year-display";
 import type { AdminClassOption } from "@/lib/data/school";
 import { Label } from "@/components/ui/label";
 
@@ -58,7 +59,7 @@ export function PrincipalClassPicker({
                       );
                     }}
                   />
-                  <span>{c.name}</span>
+                  <span>{adminClassOptionLabel(c)}</span>
                 </label>
               </li>
             );

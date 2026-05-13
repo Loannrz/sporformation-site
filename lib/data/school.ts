@@ -71,18 +71,27 @@ async function loadClassRowById(
   return null;
 }
 
+const STUDENT_SELECT_TRIES = [
+  "id,first_name,last_name,email,photo_url,class_id,entry_date,birth_date,sex,birth_place",
+  "id,first_name,last_name,email,photo_url,class_id,entry_date",
+] as const;
+
 /** Étudiants d’une classe (client Supabase quelconque : session ou service role). */
 export async function fetchStudentsForClassFromClient(
   supabase: SupabaseClient,
   classId: string,
 ): Promise<StudentProfile[]> {
-  const { data, error } = await supabase
-    .from("students")
-    .select("id,first_name,last_name,email,photo_url,class_id,entry_date")
-    .eq("class_id", classId)
-    .order("last_name");
-  if (error || !data) return [];
-  return data.map(mapStudentRow);
+  for (const sel of STUDENT_SELECT_TRIES) {
+    const { data, error } = await supabase
+      .from("students")
+      .select(sel)
+      .eq("class_id", classId)
+      .order("last_name");
+    if (!error && data) {
+      return data.map((r) => mapStudentRow(r as never));
+    }
+  }
+  return [];
 }
 
 async function supabaseOrNull() {
@@ -153,18 +162,62 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
   }));
 }
 
-export type AdminClassOption = { id: string; name: string };
+export type AdminClassOption = {
+  id: string;
+  name: string;
+  academicYearStart: number | null;
+  academicYearEnd: number | null;
+};
 
-/** Liste des classes pour sélecteurs administration (ordre alphabétique). */
+const CLASS_OPTION_SELECT_TRIES = [
+  "id,name,academic_year_start,academic_year_end",
+  "id,name",
+] as const;
+
+type ClassOptionRow = {
+  id: string;
+  name: string;
+  academic_year_start?: number | null;
+  academic_year_end?: number | null;
+};
+
+/** Liste des classes pour sélecteurs admin : tri par année de début croissante, puis nom. Préfère le service role si disponible. */
 export async function fetchAdminClassOptions(): Promise<AdminClassOption[]> {
-  const supabase = await supabaseOrNull();
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("classes")
-    .select("id,name")
-    .order("name");
-  if (error || !data) return [];
-  return data.map((c) => ({ id: c.id, name: c.name }));
+
+  let rows: ClassOptionRow[] | null = null;
+
+  for (const sel of CLASS_OPTION_SELECT_TRIES) {
+    const r = await supabase.from("classes").select(sel);
+    if (!r.error && r.data) {
+      rows = r.data as unknown as ClassOptionRow[];
+      break;
+    }
+  }
+  if (!rows) return [];
+
+  const mapped: AdminClassOption[] = rows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    academicYearStart: (c.academic_year_start as number | null | undefined) ?? null,
+    academicYearEnd: (c.academic_year_end as number | null | undefined) ?? null,
+  }));
+
+  mapped.sort((a, b) => {
+    const ay = a.academicYearStart;
+    const by = b.academicYearStart;
+    const aNull = ay == null;
+    const bNull = by == null;
+    if (aNull && bNull) return a.name.localeCompare(b.name, "fr");
+    if (aNull) return 1;
+    if (bNull) return -1;
+    if (ay !== by) return ay - by;
+    return a.name.localeCompare(b.name, "fr");
+  });
+
+  return mapped;
 }
 
 async function buildClassesWithStudentsFromClient(
@@ -241,15 +294,7 @@ export type ClassPrincipalOption = {
   lastName: string;
 };
 
-/** Affichage « 2025–2027 » (tiret cadratin). */
-export function formatAcademicYearRange(
-  start?: number | null,
-  end?: number | null,
-): string | null {
-  if (start == null && end == null) return null;
-  if (start != null && end != null) return `${start}–${end}`;
-  return String(start ?? end);
-}
+export { formatAcademicYearRange } from "@/lib/academic-year-display";
 
 async function fetchClassAdminDetailFromClient(
   supabase: SupabaseClient,
@@ -334,6 +379,9 @@ export function mapStudentRow(row: {
   photo_url: string | null;
   class_id: string | null;
   entry_date: string | null;
+  birth_date?: string | null;
+  sex?: string | null;
+  birth_place?: string | null;
 }): StudentProfile {
   return {
     id: row.id,
@@ -343,6 +391,9 @@ export function mapStudentRow(row: {
     photoUrl: row.photo_url ?? undefined,
     classId: row.class_id ?? "",
     entryDate: row.entry_date ?? undefined,
+    birthDate: row.birth_date ?? null,
+    sex: row.sex ?? null,
+    birthPlace: row.birth_place ?? null,
   };
 }
 
@@ -351,13 +402,17 @@ export async function fetchStudentById(
 ): Promise<StudentProfile | null> {
   const supabase = await supabaseOrNull();
   if (!supabase) return null;
-  const { data, error } = await supabase
-    .from("students")
-    .select("id,first_name,last_name,email,photo_url,class_id,entry_date")
-    .eq("id", id)
-    .maybeSingle();
-  if (error || !data) return null;
-  return mapStudentRow(data);
+  for (const sel of STUDENT_SELECT_TRIES) {
+    const { data, error } = await supabase
+      .from("students")
+      .select(sel)
+      .eq("id", id)
+      .maybeSingle();
+    if (!error && data) {
+      return mapStudentRow(data as unknown as Parameters<typeof mapStudentRow>[0]);
+    }
+  }
+  return null;
 }
 
 export async function fetchProfileById(

@@ -9,13 +9,11 @@ import { buildNavItems } from "@/components/layout/nav-config";
 import { isDirector, isStaffAdmin } from "@/lib/roles";
 import type { LucideIcon } from "lucide-react";
 import {
-  BookOpen,
+  GraduationCap,
   School,
   Settings,
-  Share2,
   UserRound,
   Users,
-  ScrollText,
 } from "lucide-react";
 
 type Props = {
@@ -48,10 +46,8 @@ export function CommandPalette({ user, open, onOpenChange }: Props) {
     href: string;
     labelKey:
       | "adminAccounts"
-      | "adminRoles"
       | "adminClasses"
-      | "adminLogs"
-      | "adminFormations";
+      | "adminStudents";
     Icon: LucideIcon;
   }[] = [];
 
@@ -62,30 +58,18 @@ export function CommandPalette({ user, open, onOpenChange }: Props) {
       Icon: Users,
     });
     adminDeepItems.push({
-      href: "/admin/formations",
-      labelKey: "adminFormations",
-      Icon: BookOpen,
+      href: "/admin/students",
+      labelKey: "adminStudents",
+      Icon: GraduationCap,
     });
   }
 
   if (isDirector(user)) {
-    adminDeepItems.push(
-      {
-        href: "/administration/roles",
-        labelKey: "adminRoles",
-        Icon: Share2,
-      },
-      {
-        href: "/administration/classes",
-        labelKey: "adminClasses",
-        Icon: School,
-      },
-      {
-        href: "/admin/logs",
-        labelKey: "adminLogs",
-        Icon: ScrollText,
-      },
-    );
+    adminDeepItems.push({
+      href: "/administration/classes",
+      labelKey: "adminClasses",
+      Icon: School,
+    });
   }
 
   const accountItems = [

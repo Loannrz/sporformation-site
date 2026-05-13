@@ -39,6 +39,9 @@ create table if not exists public.students (
   photo_url text,
   class_id uuid references public.classes(id) on delete set null,
   entry_date date,
+  birth_date date,
+  sex text,
+  birth_place text,
   auth_user_id uuid references auth.users(id),
   activated boolean default false,
   created_at timestamptz default now()

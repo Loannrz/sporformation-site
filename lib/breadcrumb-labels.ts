@@ -9,11 +9,9 @@ export type BreadcrumbLabelKey =
   | "admin"
   | "settings"
   | "profile"
-  | "adminRoles"
   | "adminAccounts"
   | "adminClasses"
-  | "adminLogs"
-  | "adminFormations"
+  | "adminStudents"
   | "students"
   | "detail"
   | "folder"
@@ -33,10 +31,7 @@ const STATIC: Record<string, BreadcrumbLabelKey> = {
   administration: "admin",
   admin: "admin",
   comptes: "adminAccounts",
-  roles: "adminRoles",
   users: "adminAccounts",
-  logs: "adminLogs",
-  formations: "adminFormations",
   etudiants: "students",
 };
 
@@ -50,6 +45,18 @@ export function breadcrumbLabelKeyForSegment(
 
   if (lower === "classes" && parent === "administration") {
     return "adminClasses";
+  }
+
+  if (lower === "students" && parent === "admin") {
+    return "adminStudents";
+  }
+
+  if (lower === "roles" && parent === "administration") {
+    return "admin";
+  }
+
+  if (lower === "logs" && parent === "admin") {
+    return "admin";
   }
 
   if (STATIC[lower]) return STATIC[lower];

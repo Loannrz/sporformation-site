@@ -46,6 +46,10 @@ export interface StudentProfile {
   photoUrl?: string;
   classId: string;
   entryDate?: string;
+  /** ISO date (YYYY-MM-DD). */
+  birthDate?: string | null;
+  sex?: string | null;
+  birthPlace?: string | null;
 }
 
 export type SanctionType = "retard" | "absence" | "comportement" | "autre";
