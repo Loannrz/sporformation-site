@@ -20,6 +20,24 @@ const directorAllows: Partial<Record<PermissionKey, true>> = {
   VIEW_CALENDAR: true,
 };
 
+/** Administrateur : gestion courante sans suppression de comptes ni organigramme global. */
+const administratorAllows: Partial<Record<PermissionKey, true>> = {
+  CREATE_TEACHER_ACCOUNTS: true,
+  CREATE_STUDENT_PROFILES: true,
+  MANAGE_CLASSES: true,
+  ASSIGN_CLASS_PRINCIPAL: true,
+  UPLOAD_FILES: true,
+  DELETE_OWN_FILES: true,
+  ADD_SANCTION: true,
+  REMOVE_ANY_SANCTION: true,
+  VIEW_SANCTIONS: true,
+  VIEW_FULL_SANCTION_HISTORY: true,
+  SEND_MESSAGES: true,
+  CREATE_ANNOUNCEMENTS: true,
+  MANAGE_CALENDAR: true,
+  VIEW_CALENDAR: true,
+};
+
 const principalAllows: Partial<Record<PermissionKey, true>> = {
   UPLOAD_FILES: true,
   ADD_SANCTION: true,
@@ -40,6 +58,7 @@ const professorAllows: Partial<Record<PermissionKey, true>> = {
 export function hasPermission(user: SessionUser | null, key: PermissionKey) {
   if (!user) return false;
   if (user.role === "DIRECTEUR") return directorAllows[key] === true;
+  if (user.role === "ADMINISTRATEUR") return administratorAllows[key] === true;
   if (user.role === "PROF_PRINCIPAL") return principalAllows[key] === true;
   return professorAllows[key] === true;
 }
@@ -50,7 +69,9 @@ export function sanctionsForStudentProfile(
   sanctions: Sanction[],
 ): Sanction[] {
   if (!user) return [];
-  if (user.role === "DIRECTEUR") return sanctions;
+  if (user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR") {
+    return sanctions;
+  }
   if (
     user.role === "PROF_PRINCIPAL" &&
     user.principalClassIds?.includes(studentClassId)
@@ -66,7 +87,7 @@ export function canRemoveSanction(
   studentClassId: string | undefined,
 ) {
   if (!user || sanction.status === "retired") return false;
-  if (user.role === "DIRECTEUR") {
+  if (user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR") {
     return directorAllows.REMOVE_ANY_SANCTION === true;
   }
   if (user.role === "PROF_PRINCIPAL") {
@@ -77,7 +98,9 @@ export function canRemoveSanction(
 }
 
 export function canViewRemovedHistory(user: SessionUser | null) {
-  return Boolean(user?.role === "DIRECTEUR");
+  return Boolean(
+    user?.role === "DIRECTEUR" || user?.role === "ADMINISTRATEUR",
+  );
 }
 
 export function canDownloadSanctionPdf(
@@ -85,7 +108,9 @@ export function canDownloadSanctionPdf(
   studentClassId: string,
 ) {
   if (!user) return false;
-  if (user.role === "DIRECTEUR") return true;
+  if (user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR") {
+    return true;
+  }
   if (user.role === "PROF_PRINCIPAL") {
     return user.principalClassIds?.includes(studentClassId) ?? false;
   }

@@ -1,5 +1,4 @@
-import { notFound } from "next/navigation";
-import { Link } from "@/i18n/navigation";
+import { Link, redirect } from "@/i18n/navigation";
 import {
   Card,
   CardContent,
@@ -8,6 +7,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getSessionUser } from "@/lib/session-server";
+import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { redirectToAccessDenied } from "@/lib/guards";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -17,8 +18,13 @@ export default async function AdministrationHomePage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || user.role !== "DIRECTEUR") {
-    notFound();
+
+  if (!user || !isStaffAdmin(user)) {
+    redirectToAccessDenied(params.locale);
+  }
+
+  if (!isDirector(user)) {
+    redirect({ href: "/admin", locale: params.locale });
   }
 
   const t = await getTranslations({

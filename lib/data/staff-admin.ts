@@ -1,0 +1,186 @@
+import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import {
+  PROFILE_SELECT_CORE,
+  PROFILE_SELECT_ESTABLISHMENT,
+  PROFILE_SELECT_ONBOARDING,
+  isMissingProfileColumnError,
+} from "@/lib/supabase/profile-columns";
+import { profileRoleToUserRole } from "@/lib/roles";
+import type { TeacherEmploymentStatus, UserRole } from "@/types";
+
+const ADMIN_LIST_WITH_ONBOARDING =
+  `id,email,${PROFILE_SELECT_CORE},${PROFILE_SELECT_ESTABLISHMENT},${PROFILE_SELECT_ONBOARDING}` as const;
+const ADMIN_LIST_MID =
+  `id,email,${PROFILE_SELECT_CORE},${PROFILE_SELECT_ESTABLISHMENT}` as const;
+const ADMIN_LIST_CORE = `id,email,${PROFILE_SELECT_CORE}` as const;
+
+export type StaffAdminRow = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  bio: string | null;
+  avatarUrl: string | null;
+  subjects: string[] | null;
+  joinedAt: string | null;
+  principalClassIds: string[] | null;
+  activeAtEstablishment: boolean;
+  leftEstablishmentOn: string | null;
+  mustSetPassword: boolean;
+  teacherEmploymentStatus: TeacherEmploymentStatus | null;
+};
+
+function mapStaffRow(row: {
+  id: string;
+  email: string | null;
+  first_name: string;
+  last_name: string;
+  base_role: string;
+  bio: string | null;
+  avatar_url: string | null;
+  subjects: string[] | null;
+  joined_at: string | null;
+  principal_class_ids: string[] | null;
+  active_at_establishment?: boolean | null;
+  left_establishment_on?: string | null;
+  must_set_password?: boolean | null;
+  teacher_employment_status?: string | null;
+}): StaffAdminRow {
+  return {
+    id: row.id,
+    email: row.email ?? "",
+    firstName: row.first_name,
+    lastName: row.last_name,
+    role: profileRoleToUserRole(String(row.base_role)),
+    bio: row.bio,
+    avatarUrl: row.avatar_url,
+    subjects: row.subjects,
+    joinedAt: row.joined_at,
+    principalClassIds: row.principal_class_ids,
+    activeAtEstablishment: row.active_at_establishment !== false,
+    leftEstablishmentOn: row.left_establishment_on ?? null,
+    mustSetPassword: row.must_set_password === true,
+    teacherEmploymentStatus: (row.teacher_employment_status as TeacherEmploymentStatus) ?? null,
+  };
+}
+
+async function selectAllStaff(supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabase>>>) {
+  const r1 = await supabase
+    .from("profiles")
+    .select(ADMIN_LIST_WITH_ONBOARDING)
+    .order("last_name", { ascending: true });
+
+  if (!r1.error) return r1;
+  if (!isMissingProfileColumnError(r1.error)) return r1;
+
+  const r2 = await supabase
+    .from("profiles")
+    .select(ADMIN_LIST_MID)
+    .order("last_name", { ascending: true });
+
+  if (!r2.error) return r2;
+  if (!isMissingProfileColumnError(r2.error)) return r2;
+
+  return supabase
+    .from("profiles")
+    .select(ADMIN_LIST_CORE)
+    .order("last_name", { ascending: true });
+}
+
+async function selectStaffById(
+  supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabase>>>,
+  id: string,
+) {
+  const r1 = await supabase
+    .from("profiles")
+    .select(ADMIN_LIST_WITH_ONBOARDING)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!r1.error) return r1;
+  if (!isMissingProfileColumnError(r1.error)) return r1;
+
+  const r2 = await supabase
+    .from("profiles")
+    .select(ADMIN_LIST_MID)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!r2.error) return r2;
+  if (!isMissingProfileColumnError(r2.error)) return r2;
+
+  return supabase.from("profiles").select(ADMIN_LIST_CORE).eq("id", id).maybeSingle();
+}
+
+export async function fetchAllStaffForAdmin(): Promise<StaffAdminRow[]> {
+  const admin = createAdminSupabase();
+  if (admin) {
+    const r1 = await admin
+      .from("profiles")
+      .select(ADMIN_LIST_WITH_ONBOARDING)
+      .order("last_name", { ascending: true });
+    if (!r1.error && r1.data) {
+      return r1.data.map(mapStaffRow);
+    }
+    if (r1.error && isMissingProfileColumnError(r1.error)) {
+      const r2 = await admin
+        .from("profiles")
+        .select(ADMIN_LIST_MID)
+        .order("last_name", { ascending: true });
+      if (!r2.error && r2.data) {
+        return r2.data.map(mapStaffRow);
+      }
+      if (r2.error && isMissingProfileColumnError(r2.error)) {
+        const r3 = await admin
+          .from("profiles")
+          .select(ADMIN_LIST_CORE)
+          .order("last_name", { ascending: true });
+        if (!r3.error && r3.data) return r3.data.map(mapStaffRow);
+      }
+    }
+  }
+
+  const supabase = await createServerSupabase();
+  if (!supabase) return [];
+  const res = await selectAllStaff(supabase);
+  if (res.error || !res.data) return [];
+  return res.data.map(mapStaffRow);
+}
+
+export async function fetchStaffByIdForAdmin(
+  id: string,
+): Promise<StaffAdminRow | null> {
+  const admin = createAdminSupabase();
+  if (admin) {
+    const r1 = await admin
+      .from("profiles")
+      .select(ADMIN_LIST_WITH_ONBOARDING)
+      .eq("id", id)
+      .maybeSingle();
+    if (!r1.error && r1.data) return mapStaffRow(r1.data);
+    if (r1.error && isMissingProfileColumnError(r1.error)) {
+      const r2 = await admin
+        .from("profiles")
+        .select(ADMIN_LIST_MID)
+        .eq("id", id)
+        .maybeSingle();
+      if (!r2.error && r2.data) return mapStaffRow(r2.data);
+      if (r2.error && isMissingProfileColumnError(r2.error)) {
+        const r3 = await admin
+          .from("profiles")
+          .select(ADMIN_LIST_CORE)
+          .eq("id", id)
+          .maybeSingle();
+        if (!r3.error && r3.data) return mapStaffRow(r3.data);
+      }
+    }
+  }
+
+  const supabase = await createServerSupabase();
+  if (!supabase) return null;
+  const res = await selectStaffById(supabase, id);
+  if (res.error || !res.data) return null;
+  return mapStaffRow(res.data);
+}

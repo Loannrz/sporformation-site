@@ -7,7 +7,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { allStaff } from "@/lib/mock-data";
+import { Badge } from "@/components/ui/badge";
+import { fetchStaffByIdForAdmin } from "@/lib/data/staff-admin";
 import { getSessionUser } from "@/lib/session-server";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
@@ -20,8 +21,12 @@ export default async function ProfilePage({
   params: { locale: AppLocale; id: string };
 }) {
   const viewer = await getSessionUser();
-  const staff = allStaff.find((s) => s.id === params.id);
-  if (!viewer || !staff) {
+  if (!viewer) {
+    notFound();
+  }
+
+  const staff = await fetchStaffByIdForAdmin(params.id);
+  if (!staff) {
     notFound();
   }
 
@@ -33,6 +38,10 @@ export default async function ProfilePage({
     locale: params.locale,
     namespace: "common",
   });
+  const ta = await getTranslations({
+    locale: params.locale,
+    namespace: "admin.accounts",
+  });
 
   const dateLocale = params.locale === "fr" ? fr : enUS;
   const initials = `${staff.firstName[0]}${staff.lastName[0]}`;
@@ -43,11 +52,13 @@ export default async function ProfilePage({
         ? tc("rolePrincipal")
         : tc("roleTeacher");
 
+  const joined = staff.joinedAt
+    ? format(new Date(staff.joinedAt), "PP", { locale: dateLocale })
+    : "—";
+
   const roleLabel = tp("subtitle", {
     role: roleHuman,
-    joined: staff.joinedAt
-      ? format(new Date(staff.joinedAt), "PP", { locale: dateLocale })
-      : "—",
+    joined,
   });
 
   return (
@@ -61,12 +72,25 @@ export default async function ProfilePage({
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
           <div className="space-y-3">
-            <div>
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-3xl font-semibold">
                 {staff.firstName} {staff.lastName}
               </h1>
-              <p className="text-muted-foreground">{staff.email}</p>
+              {!staff.activeAtEstablishment ? (
+                <Badge variant="outline" className="text-amber-800 dark:text-amber-200">
+                  {ta("badgeLeft")}
+                </Badge>
+              ) : null}
             </div>
+            <p className="text-muted-foreground">{staff.email}</p>
+            {!staff.activeAtEstablishment && staff.leftEstablishmentOn ? (
+              <p className="text-sm text-muted-foreground">
+                {ta("leftOnLabel")}:{" "}
+                {format(new Date(staff.leftEstablishmentOn), "PP", {
+                  locale: dateLocale,
+                })}
+              </p>
+            ) : null}
             <p className="text-sm text-muted-foreground">{staff.bio}</p>
             <p className="text-xs uppercase tracking-wide text-primary">
               {roleLabel}
@@ -90,7 +114,9 @@ export default async function ProfilePage({
         <CardHeader>
           <CardTitle>Vie à l&apos;école</CardTitle>
           <CardDescription>
-            Logs de connexion : {viewer.role === "DIRECTEUR" ? "visibles pour vous uniquement après branchement Supabase." : "masqués — contactez la direction pour export conformité RGPD."}
+            {viewer.role === "DIRECTEUR"
+              ? "Historique détaillé : branchement futur (logs conformité)."
+              : "Logs de connexion : masqués — contactez la direction pour export conformité RGPD."}
           </CardDescription>
         </CardHeader>
       </Card>

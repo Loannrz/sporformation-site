@@ -26,6 +26,7 @@ create table if not exists public.profiles (
 create table if not exists public.classes (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  description text,
   principal_id uuid references public.profiles(id),
   created_at timestamptz default now()
 );
@@ -92,7 +93,7 @@ create table if not exists public.files (
   logical_key text not null,
   bucket_id text default 'documents',
   current_path text not null,
-  class_id uuid references public.classes(id),
+  class_id uuid references public.classes(id) on delete set null,
   subject_slug text,
   owner_id uuid references public.profiles(id),
   mime text,
@@ -152,7 +153,7 @@ create table if not exists public.calendar_events (
   starts_at timestamptz not null,
   ends_at timestamptz not null,
   kind calendar_event_type not null default 'school_event',
-  class_id uuid references public.classes(id),
+  class_id uuid references public.classes(id) on delete set null,
   teacher_id uuid references public.profiles(id),
   created_by uuid references public.profiles(id),
   created_at timestamptz default now()
@@ -258,3 +259,9 @@ create policy "staff read role_assignments" on public.role_assignments
 
 create policy "staff write role_assignments" on public.role_assignments
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+-- Évolutions admin (comptes enseignants, réordonnancement rôles, contraintes ON DELETE) :
+-- exécuter le fichier supabase/migrations/20260213_admin_profiles_and_fk.sql dans le SQL Editor.
+
+-- Première connexion enseignant + statut d’affectation :
+-- supabase/migrations/20260214_teacher_onboarding.sql

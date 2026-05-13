@@ -1,4 +1,0 @@
-{"sessionId":"26eee1","hypothesisId":"H3","message":"filesystem probe root node_modules/source-map-js","data":{"path":"/Users/loannpicardblardone/Desktop/Sporformation/node_modules/source-map-js","existsDir":true},"timestamp":1778678289834}
-{"sessionId":"26eee1","hypothesisId":"H1","message":"require.resolve failed","data":{"error":"Cannot find module 'source-map-js'\nRequire stack:\n- /Users/loannpicardblardone/Desktop/Sporformation/package.json"},"timestamp":1778678289836}
-{"sessionId":"26eee1","hypothesisId":"H3","message":"source-map-js path probe","data":{"path":"/Users/loannpicardblardone/Desktop/Sporformation/node_modules/source-map-js","existsDir":true},"timestamp":1778678306350}
-{"sessionId":"26eee1","hypothesisId":"H2","message":"require.resolve(source-map-js) OK","data":{"resolved":"/Users/loannpicardblardone/Desktop/Sporformation/node_modules/source-map-js/source-map.js"},"timestamp":1778678306351}

@@ -15,7 +15,9 @@ export default async function DashboardGroupLayout({
 }) {
   const user = await getSessionUser();
   if (user) {
-    return <DashboardShell user={user}>{children}</DashboardShell>;
+    return (
+      <DashboardShell user={user}>{children}</DashboardShell>
+    );
   }
 
   const supabase = await createServerSupabase();

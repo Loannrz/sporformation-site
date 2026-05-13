@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -154,6 +155,54 @@ export async function signInWithPasswordAction(
 
   redirect({ href: "/dashboard", locale });
   return initialSignInState;
+}
+
+export async function completeFirstPasswordSetupAction(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const supabase = await createServerSupabase();
+  if (!supabase) return { ok: false, error: "NO_DB" };
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "NO_USER" };
+
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("teacher_employment_status")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const patch: Record<string, unknown> = {
+    must_set_password: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (prof?.teacher_employment_status === "NEW_TO_SCHOOL") {
+    patch.teacher_employment_status = "ACTIVE_AT_SCHOOL";
+  }
+
+  const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
+
+  if (!error) {
+    revalidatePath("/", "layout");
+    return { ok: true };
+  }
+
+  const { error: e2 } = await supabase
+    .from("profiles")
+    .update({
+      must_set_password: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", user.id);
+
+  if (e2) return { ok: false, error: error.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 export async function signOutAction(formData: FormData) {

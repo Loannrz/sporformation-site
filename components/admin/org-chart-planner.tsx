@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -21,6 +21,7 @@ import { GripVertical } from "lucide-react";
 import { reorderRolesAction } from "@/app/actions/org";
 import type { CustomSchoolRole } from "@/types";
 import type { AppLocale } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
 
 type Props = {
   locale: AppLocale;
@@ -43,6 +44,10 @@ export function OrgChartPlanner({
 
   const ids = useMemo(() => roles.map((r) => r.id), [roles]);
 
+  useEffect(() => {
+    setRoles(initialRoles);
+  }, [initialRoles]);
+
   const onDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -50,9 +55,13 @@ export function OrgChartPlanner({
     setRoles((prev) => {
       const oldIndex = prev.findIndex((r) => r.id === active.id);
       const newIndex = prev.findIndex((r) => r.id === over.id);
+      const snapshot = prev;
       const next = arrayMove(prev, oldIndex, newIndex);
       startTransition(async () => {
-        await reorderRolesAction(locale, next.map((r) => r.id));
+        const res = await reorderRolesAction(locale, next.map((r) => r.id));
+        if (res && "ok" in res && res.ok === false) {
+          setRoles(snapshot);
+        }
       });
       return next;
     });
@@ -89,6 +98,7 @@ function SortableRoleItem({
   label: string;
   disabled: boolean;
 }) {
+  const t = useTranslations("admin");
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: role.id, disabled });
 
@@ -118,7 +128,7 @@ function SortableRoleItem({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{label}</p>
         <p className="text-xs text-muted-foreground">
-          Rôle personnalisable ({permCount} permissions actives dans la démo locale)
+          {t("rolesReorderBlurb", { count: permCount })}
         </p>
       </div>
       <span className="rounded-full bg-primary/15 px-2 py-1 text-[10px] font-semibold text-primary dark:bg-primary/25">

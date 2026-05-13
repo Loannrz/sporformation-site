@@ -1,5 +1,7 @@
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { SessionUser } from "@/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Announcement,
   Sanction,
@@ -8,6 +10,80 @@ import type {
   SchoolClass,
   StudentProfile,
 } from "@/types";
+
+type ClassRowDb = {
+  id: string;
+  name: string;
+  principal_id: string | null;
+  description: string | null;
+  academic_year_start: number | null;
+  academic_year_end: number | null;
+};
+
+const CLASS_SELECT_TRIES = [
+  "id,name,description,principal_id,academic_year_start,academic_year_end",
+  "id,name,description,principal_id",
+  "id,name,principal_id,academic_year_start,academic_year_end",
+  "id,name,principal_id",
+] as const;
+
+async function loadAllClassRows(
+  supabase: SupabaseClient,
+): Promise<ClassRowDb[]> {
+  for (const sel of CLASS_SELECT_TRIES) {
+    const r = await supabase.from("classes").select(sel).order("name");
+    if (!r.error && r.data) {
+      return (r.data as unknown as ClassRowDb[]).map((c) => ({
+        id: c.id,
+        name: c.name,
+        principal_id: c.principal_id,
+        description: (c.description as string | null | undefined) ?? null,
+        academic_year_start: (c.academic_year_start as number | null | undefined) ?? null,
+        academic_year_end: (c.academic_year_end as number | null | undefined) ?? null,
+      }));
+    }
+  }
+  return [];
+}
+
+async function loadClassRowById(
+  supabase: SupabaseClient,
+  classId: string,
+): Promise<ClassRowDb | null> {
+  for (const sel of CLASS_SELECT_TRIES) {
+    const r = await supabase
+      .from("classes")
+      .select(sel)
+      .eq("id", classId)
+      .maybeSingle();
+    if (!r.error && r.data) {
+      const c = r.data as unknown as ClassRowDb;
+      return {
+        id: c.id,
+        name: c.name,
+        principal_id: c.principal_id,
+        description: (c.description as string | null | undefined) ?? null,
+        academic_year_start: (c.academic_year_start as number | null | undefined) ?? null,
+        academic_year_end: (c.academic_year_end as number | null | undefined) ?? null,
+      };
+    }
+  }
+  return null;
+}
+
+/** Étudiants d’une classe (client Supabase quelconque : session ou service role). */
+export async function fetchStudentsForClassFromClient(
+  supabase: SupabaseClient,
+  classId: string,
+): Promise<StudentProfile[]> {
+  const { data, error } = await supabase
+    .from("students")
+    .select("id,first_name,last_name,email,photo_url,class_id,entry_date")
+    .eq("class_id", classId)
+    .order("last_name");
+  if (error || !data) return [];
+  return data.map(mapStudentRow);
+}
 
 async function supabaseOrNull() {
   return createServerSupabase();
@@ -77,41 +153,60 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
   }));
 }
 
-export async function fetchClassesWithStudents(): Promise<SchoolClass[]> {
+export type AdminClassOption = { id: string; name: string };
+
+/** Liste des classes pour sélecteurs administration (ordre alphabétique). */
+export async function fetchAdminClassOptions(): Promise<AdminClassOption[]> {
   const supabase = await supabaseOrNull();
   if (!supabase) return [];
-  const { data: classes, error: cErr } = await supabase
+  const { data, error } = await supabase
     .from("classes")
-    .select("id,name,principal_id")
+    .select("id,name")
     .order("name");
-  if (cErr || !classes) return [];
+  if (error || !data) return [];
+  return data.map((c) => ({ id: c.id, name: c.name }));
+}
 
+async function buildClassesWithStudentsFromClient(
+  supabase: SupabaseClient,
+): Promise<SchoolClass[]> {
+  const classes = await loadAllClassRows(supabase);
   const { data: students, error: sErr } = await supabase
     .from("students")
     .select("id,class_id");
-  if (sErr || !students) {
-    return classes.map((c) => ({
-      id: c.id,
-      name: c.name,
-      principalId: c.principal_id ?? undefined,
-      studentIds: [],
-    }));
-  }
-
   const byClass = new Map<string, string[]>();
-  for (const s of students) {
-    if (!s.class_id) continue;
-    const list = byClass.get(s.class_id) ?? [];
-    list.push(s.id);
-    byClass.set(s.class_id, list);
+  if (!sErr && students) {
+    for (const s of students) {
+      if (!s.class_id) continue;
+      const list = byClass.get(s.class_id) ?? [];
+      list.push(s.id);
+      byClass.set(s.class_id, list);
+    }
   }
-
   return classes.map((c) => ({
     id: c.id,
     name: c.name,
+    description: c.description ?? null,
+    academicYearStart: c.academic_year_start ?? null,
+    academicYearEnd: c.academic_year_end ?? null,
     principalId: c.principal_id ?? undefined,
     studentIds: byClass.get(c.id) ?? [],
   }));
+}
+
+export async function fetchClassesWithStudents(): Promise<SchoolClass[]> {
+  const supabase = await supabaseOrNull();
+  if (!supabase) return [];
+  return buildClassesWithStudentsFromClient(supabase);
+}
+
+/** Liste classes + effectifs : préfère le client service role (contourne RLS) si configuré. */
+export async function fetchClassesWithStudentsForAdmin(): Promise<SchoolClass[]> {
+  const admin = createAdminSupabase();
+  const sessionClient = await supabaseOrNull();
+  const supabase = admin ?? sessionClient;
+  if (!supabase) return [];
+  return buildClassesWithStudentsFromClient(supabase);
 }
 
 export async function fetchClassById(
@@ -126,13 +221,109 @@ export async function fetchStudentsForClass(
 ): Promise<StudentProfile[]> {
   const supabase = await supabaseOrNull();
   if (!supabase) return [];
+  return fetchStudentsForClassFromClient(supabase, classId);
+}
+
+export type ClassAdminDetail = {
+  id: string;
+  name: string;
+  description: string | null;
+  academicYearStart: number | null;
+  academicYearEnd: number | null;
+  principalId: string | null;
+  principal: { id: string; firstName: string; lastName: string } | null;
+  students: StudentProfile[];
+};
+
+export type ClassPrincipalOption = {
+  id: string;
+  firstName: string;
+  lastName: string;
+};
+
+/** Affichage « 2025–2027 » (tiret cadratin). */
+export function formatAcademicYearRange(
+  start?: number | null,
+  end?: number | null,
+): string | null {
+  if (start == null && end == null) return null;
+  if (start != null && end != null) return `${start}–${end}`;
+  return String(start ?? end);
+}
+
+async function fetchClassAdminDetailFromClient(
+  supabase: SupabaseClient,
+  classId: string,
+): Promise<ClassAdminDetail | null> {
+  const row = await loadClassRowById(supabase, classId);
+  if (!row) return null;
+
+  const students = await fetchStudentsForClassFromClient(supabase, classId);
+
+  let principal: ClassAdminDetail["principal"] = null;
+  if (row.principal_id) {
+    const { data: p } = await supabase
+      .from("profiles")
+      .select("id,first_name,last_name")
+      .eq("id", row.principal_id)
+      .maybeSingle();
+    if (p) {
+      principal = {
+        id: p.id,
+        firstName: p.first_name,
+        lastName: p.last_name,
+      };
+    }
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? null,
+    academicYearStart: row.academic_year_start,
+    academicYearEnd: row.academic_year_end,
+    principalId: row.principal_id,
+    principal,
+    students,
+  };
+}
+
+export async function fetchClassAdminDetail(
+  classId: string,
+): Promise<ClassAdminDetail | null> {
+  const supabase = await supabaseOrNull();
+  if (!supabase) return null;
+  return fetchClassAdminDetailFromClient(supabase, classId);
+}
+
+/** Fiche classe admin : préfère le client service role si configuré (évite 404 si RLS bloque la lecture). */
+export async function fetchClassAdminDetailForAdmin(
+  classId: string,
+): Promise<ClassAdminDetail | null> {
+  const admin = createAdminSupabase();
+  const sessionClient = await supabaseOrNull();
+  const supabase = admin ?? sessionClient;
+  if (!supabase) return null;
+  return fetchClassAdminDetailFromClient(supabase, classId);
+}
+
+/** Profil intervenants pouvant être désignés professeur principal de classe. */
+export async function fetchEligiblePrincipalsForClasses(): Promise<
+  ClassPrincipalOption[]
+> {
+  const supabase = await supabaseOrNull();
+  if (!supabase) return [];
   const { data, error } = await supabase
-    .from("students")
-    .select("id,first_name,last_name,email,photo_url,class_id,entry_date")
-    .eq("class_id", classId)
+    .from("profiles")
+    .select("id,first_name,last_name")
+    .in("base_role", ["PROFESSEUR", "PROF_PRINCIPAL"])
     .order("last_name");
   if (error || !data) return [];
-  return data.map(mapStudentRow);
+  return data.map((p) => ({
+    id: p.id,
+    firstName: p.first_name,
+    lastName: p.last_name,
+  }));
 }
 
 export function mapStudentRow(row: {

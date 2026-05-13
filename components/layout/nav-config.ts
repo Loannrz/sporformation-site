@@ -1,5 +1,6 @@
 import type { SessionUser } from "@/types";
 import { hasPermission } from "@/lib/permissions";
+import { isStaffAdmin } from "@/lib/roles";
 import {
   LayoutDashboard,
   Megaphone,
@@ -24,7 +25,8 @@ export type NavItem = {
   icon: typeof LayoutDashboard;
   /** Si défini, exige la permission ; sinon visible pour tout le monde connecté. */
   permission?: Parameters<typeof hasPermission>[1];
-  directorOnly?: boolean;
+  /** Réservé à direction + administrateurs (entrée du hub admin). */
+  staffAdminOnly?: boolean;
 };
 
 export function buildNavItems(user: SessionUser | null): NavItem[] {
@@ -64,18 +66,18 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
     },
   ];
 
-  if (user?.role === "DIRECTEUR") {
+  if (user && isStaffAdmin(user)) {
     items.push({
-      href: "/administration",
+      href: "/admin",
       labelKey: "admin",
       icon: Shield,
-      directorOnly: true,
+      staffAdminOnly: true,
     });
   }
 
   return items.filter((item) => {
     if (!user) return false;
-    if (item.directorOnly) return user.role === "DIRECTEUR";
+    if (item.staffAdminOnly) return isStaffAdmin(user);
     if (item.permission) return hasPermission(user, item.permission);
     return true;
   });

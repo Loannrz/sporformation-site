@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 import { NextIntlClientProvider } from "next-intl";
+import { Toaster } from "sonner";
 
 type Props = {
   children: React.ReactNode;
@@ -23,6 +24,7 @@ export function AppProviders({ children, locale, messages }: Props) {
         disableTransitionOnChange
       >
         {children}
+        <Toaster richColors position="top-center" closeButton />
       </ThemeProvider>
     </NextIntlClientProvider>
   );

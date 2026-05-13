@@ -1,5 +1,15 @@
 /** Rôles métier livrés en base ; les rôles custom sont des chaînes additionnelles. */
-export type UserRole = "DIRECTEUR" | "PROF_PRINCIPAL" | "PROFESSEUR";
+export type UserRole =
+  | "DIRECTEUR"
+  | "ADMINISTRATEUR"
+  | "PROF_PRINCIPAL"
+  | "PROFESSEUR";
+
+/** Statut d’affectation (fiche enseignant). */
+export type TeacherEmploymentStatus =
+  | "ACTIVE_AT_SCHOOL"
+  | "NEW_TO_SCHOOL"
+  | "FORMER_INACTIVE";
 
 export interface SessionUser {
   id: string;
@@ -12,11 +22,18 @@ export interface SessionUser {
   subjects?: string[];
   joinedAt?: string;
   principalClassIds?: string[];
+  /** Compte créé par la direction : l’utilisateur doit choisir un mot de passe après première connexion (OTP). */
+  mustSetPassword?: boolean;
+  teacherEmploymentStatus?: TeacherEmploymentStatus;
 }
 
 export interface SchoolClass {
   id: string;
   name: string;
+  description?: string | null;
+  /** Année de début du cycle (ex. 2025 pour « 2025–2027 »). */
+  academicYearStart?: number | null;
+  academicYearEnd?: number | null;
   principalId?: string;
   studentIds: string[];
 }

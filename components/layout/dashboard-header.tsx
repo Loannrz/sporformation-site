@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,61 +11,57 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { signOutAction } from "@/app/actions/auth";
 import type { SessionUser } from "@/types";
-import { ChevronDown, Moon, Settings, Sun, UserRound } from "lucide-react";
-import { routing } from "@/i18n/routing";
+import { ChevronDown, Search, Settings, UserRound } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useTheme } from "next-themes";
-import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
+import { CommandPalette } from "@/components/layout/command-palette";
 
 type Props = { user: SessionUser };
 
 export function DashboardHeader({ user }: Props) {
-  const { resolvedTheme, setTheme } = useTheme();
   const locale = useLocale();
-  const router = useRouter();
-  const pathname = usePathname();
   const tNav = useTranslations("nav");
   const tCommon = useTranslations("common");
   const tAuth = useTranslations("auth");
-  const otherLocale =
-    routing.locales.find((l) => l !== locale) ?? routing.defaultLocale;
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const initials = `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`;
 
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={300}>
       <header className="sticky top-0 z-30 flex min-h-[4.25rem] items-center justify-between gap-4 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl lg:px-8">
         <div className="min-w-0 flex-1" />
         <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="rounded-full border-dashed px-3 text-muted-foreground"
-            onClick={() =>
-              router.replace(pathname, { locale: otherLocale })
-            }
-          >
-            {locale === "fr"
-              ? tCommon("languageEn")
-              : tCommon("languageFr")}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="relative rounded-full"
-            aria-label="Theme"
-            onClick={() =>
-              setTheme(resolvedTheme === "dark" ? "light" : "dark")
-            }
-          >
-            <Sun className="h-[1rem] w-[1rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-[1rem] w-[1rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          </Button>
+          <CommandPalette
+            user={user}
+            open={paletteOpen}
+            onOpenChange={setPaletteOpen}
+          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="rounded-full"
+                aria-label={tCommon("commandMenuLabel")}
+                onClick={() => setPaletteOpen(true)}
+              >
+                <Search className="h-[1rem] w-[1rem]" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {tCommon("commandMenuTooltip")}
+            </TooltipContent>
+          </Tooltip>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

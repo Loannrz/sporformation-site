@@ -1,8 +1,10 @@
-import { notFound } from "next/navigation";
+import { AdminBackLink } from "@/components/admin/admin-back-link";
 import { OrgChartPlanner } from "@/components/admin/org-chart-planner";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MOCK_CUSTOM_ROLES } from "@/lib/mock-data";
+import { fetchCustomRolesOrdered } from "@/lib/data/custom-roles";
 import { getSessionUser } from "@/lib/session-server";
+import { isDirector } from "@/lib/roles";
+import { redirectToAccessDenied } from "@/lib/guards";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -12,8 +14,8 @@ export default async function AdminRolesPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || user.role !== "DIRECTEUR") {
-    notFound();
+  if (!user || !isDirector(user)) {
+    redirectToAccessDenied(params.locale);
   }
 
   const t = await getTranslations({
@@ -25,8 +27,11 @@ export default async function AdminRolesPage({
     namespace: "org",
   });
 
+  const roles = await fetchCustomRolesOrdered();
+
   return (
     <div className="space-y-8">
+      <AdminBackLink href="/administration" label={t("backToAdmin")} />
       <div>
         <h1 className="text-3xl font-semibold">{t("rolesTitle")}</h1>
         <p className="text-muted-foreground">{t("orgHint")}</p>
@@ -37,13 +42,17 @@ export default async function AdminRolesPage({
           <CardDescription>{tOrg("assignPeople")}</CardDescription>
         </CardHeader>
         <div className="px-6 pb-8">
-          <OrgChartPlanner
-            locale={params.locale}
-            initialRoles={MOCK_CUSTOM_ROLES}
-            labelFor={(role) =>
-              params.locale === "fr" ? role.nameFr : role.nameEn
-            }
-          />
+          {roles.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("rolesEmpty")}</p>
+          ) : (
+            <OrgChartPlanner
+              locale={params.locale}
+              initialRoles={roles}
+              labelFor={(role) =>
+                params.locale === "fr" ? role.nameFr : role.nameEn
+              }
+            />
+          )}
         </div>
       </Card>
     </div>
