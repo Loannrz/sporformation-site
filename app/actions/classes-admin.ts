@@ -187,6 +187,7 @@ export async function createClassAction(
 
   revalidatePath(`/${locale}/administration/classes`);
   revalidatePath(`/${locale}/administration/classes/${data.id}`);
+  revalidatePath(`/${locale}/cloud`);
   return { ok: true as const, id: data.id };
 }
 
@@ -253,6 +254,7 @@ export async function updateClassAction(
 
   revalidatePath(`/${locale}/administration/classes`);
   revalidatePath(`/${locale}/administration/classes/${classId}`);
+  revalidatePath(`/${locale}/cloud`);
   return { ok: true as const };
 }
 
@@ -278,5 +280,6 @@ export async function deleteClassAction(locale: AppLocale, classId: string) {
   if (dErr) return { ok: false as const, error: dErr.message };
 
   revalidatePath(`/${locale}/administration/classes`);
+  revalidatePath(`/${locale}/cloud`);
   return { ok: true as const };
 }

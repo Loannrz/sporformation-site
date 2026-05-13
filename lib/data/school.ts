@@ -352,7 +352,7 @@ export async function fetchClassAdminDetailForAdmin(
   return fetchClassAdminDetailFromClient(supabase, classId);
 }
 
-/** Profil intervenants pouvant être désignés professeur principal de classe. */
+/** Profils enseignants pouvant être désignés professeur principal de classe. */
 export async function fetchEligiblePrincipalsForClasses(): Promise<
   ClassPrincipalOption[]
 > {
@@ -628,4 +628,302 @@ export async function fetchSanctionsForClassStudents(
   return rows.map((r) =>
     mapSanctionDbToApp(r, profileMap, attMap.get(r.id) ?? []),
   );
+}
+
+export function formatCloudClassDisplayName(
+  name: string,
+  academicYearStart: number | null,
+  academicYearEnd: number | null,
+): string {
+  const y0 = academicYearStart;
+  const y1 = academicYearEnd;
+  if (
+    y0 != null &&
+    y1 != null &&
+    Number.isFinite(y0) &&
+    Number.isFinite(y1)
+  ) {
+    return `${name} – ${y0}–${y1}`;
+  }
+  return name;
+}
+
+/** Cycle considéré comme terminé si `academicYearEnd` &lt; année civile courante. */
+export function cloudClassIsPastCycle(academicYearEnd: number | null): boolean {
+  if (academicYearEnd == null || !Number.isFinite(academicYearEnd)) {
+    return false;
+  }
+  const y = new Date().getFullYear();
+  return academicYearEnd < y;
+}
+
+export type CloudExplorerClassFolder = {
+  id: string;
+  /** Libellé affiché : « Nom – début–fin » lorsque les années sont renseignées. */
+  displayLabel: string;
+  documentCount: number;
+  academicYearStart: number | null;
+  academicYearEnd: number | null;
+  /** true si l’année de fin de cycle est strictement avant l’année civile courante. */
+  isPastCycle: boolean;
+};
+
+export type CloudExplorerTeacherFolder = {
+  id: string;
+  displayName: string;
+  documentCount: number;
+};
+
+/**
+ * Dossiers Cloud « par classe » et « par professeur » : toutes les entités en base,
+ * avec le nombre de fichiers liés (`files.class_id` / `files.owner_id`).
+ */
+export async function fetchCloudExplorerFolders(): Promise<{
+  classes: CloudExplorerClassFolder[];
+  teachers: CloudExplorerTeacherFolder[];
+}> {
+  const empty = {
+    classes: [] as CloudExplorerClassFolder[],
+    teachers: [] as CloudExplorerTeacherFolder[],
+  };
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
+  if (!supabase) return empty;
+
+  const classRows = await loadAllClassRows(supabase);
+
+  const { data: profRows, error: profErr } = await supabase
+    .from("profiles")
+    .select("id,first_name,last_name")
+    .or(
+      "base_role.eq.PROFESSEUR,base_role.eq.PROF_PRINCIPAL,base_role.eq.DIRECTEUR,base_role.eq.ADMINISTRATEUR",
+    )
+    .order("last_name");
+
+  const { data: fileRows, error: filesErr } = await supabase
+    .from("files")
+    .select("class_id,owner_id");
+
+  const classCounts = new Map<string, number>();
+  const ownerCounts = new Map<string, number>();
+  if (!filesErr && fileRows) {
+    for (const f of fileRows) {
+      const cid = f.class_id as string | null;
+      if (cid) {
+        classCounts.set(cid, (classCounts.get(cid) ?? 0) + 1);
+      }
+      const oid = f.owner_id as string | null;
+      if (oid) {
+        ownerCounts.set(oid, (ownerCounts.get(oid) ?? 0) + 1);
+      }
+    }
+  }
+
+  const classes: CloudExplorerClassFolder[] = classRows.map((c) => ({
+    id: c.id,
+    displayLabel: formatCloudClassDisplayName(
+      c.name,
+      c.academic_year_start,
+      c.academic_year_end,
+    ),
+    documentCount: classCounts.get(c.id) ?? 0,
+    academicYearStart: c.academic_year_start,
+    academicYearEnd: c.academic_year_end,
+    isPastCycle: cloudClassIsPastCycle(c.academic_year_end),
+  }));
+
+  let teachers: CloudExplorerTeacherFolder[] = [];
+  if (!profErr && profRows) {
+    teachers = profRows.map((p) => ({
+      id: p.id,
+      displayName: `${p.first_name} ${p.last_name}`.trim() || "—",
+      documentCount: ownerCounts.get(p.id) ?? 0,
+    }));
+  }
+
+  return { classes, teachers };
+}
+
+/**
+ * Titre affiché sur la page dossier Cloud (classe ou professeur) à partir du slug d’URL.
+ */
+export async function resolveCloudFolderHeading(
+  dossierParam: string,
+): Promise<{ title: string }> {
+  const slug = decodeURIComponent(dossierParam);
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
+  const fallback = { title: slug };
+
+  if (!supabase) return fallback;
+
+  if (slug.startsWith("classe-")) {
+    const id = slug.slice("classe-".length);
+    const row = await loadClassRowById(supabase, id);
+    if (!row) return fallback;
+    return {
+      title: formatCloudClassDisplayName(
+        row.name,
+        row.academic_year_start,
+        row.academic_year_end,
+      ),
+    };
+  }
+
+  if (slug.startsWith("prof-")) {
+    const id = slug.slice("prof-".length);
+    const { data } = await supabase
+      .from("profiles")
+      .select("first_name,last_name")
+      .eq("id", id)
+      .maybeSingle();
+    if (!data) return fallback;
+    const name = `${data.first_name} ${data.last_name}`.trim();
+    return { title: name || slug };
+  }
+
+  return fallback;
+}
+
+export type CloudFolderSlugParsed =
+  | { kind: "class"; id: string }
+  | { kind: "teacher"; id: string };
+
+export function parseCloudFolderSlug(
+  dossierParam: string,
+): CloudFolderSlugParsed | null {
+  const slug = decodeURIComponent(dossierParam);
+  if (slug.startsWith("classe-")) {
+    const id = slug.slice("classe-".length);
+    if (!id) return null;
+    return { kind: "class", id };
+  }
+  if (slug.startsWith("prof-")) {
+    const id = slug.slice("prof-".length);
+    if (!id) return null;
+    return { kind: "teacher", id };
+  }
+  return null;
+}
+
+export type CloudFolderFileRow = {
+  id: string;
+  title: string;
+  description: string;
+  mime: string | null;
+  createdAt: string;
+  version: number;
+  /** Chemin dans le bucket `documents` pour la version affichée. */
+  storagePath: string | null;
+};
+
+export type CloudFolderFileWithUrl = CloudFolderFileRow & {
+  signedUrl: string | null;
+};
+
+/** Fichiers liés à un dossier Cloud (classe ou professeur). */
+export async function fetchCloudFolderFiles(
+  kind: "class" | "teacher",
+  entityId: string,
+): Promise<CloudFolderFileRow[]> {
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
+  if (!supabase) return [];
+
+  const fullSelect =
+    "id,title,description,logical_key,mime,created_at,class_id,owner_id";
+  const legacySelect = "id,logical_key,mime,created_at,class_id,owner_id";
+
+  const run = async (sel: string) =>
+    kind === "class"
+      ? await supabase
+          .from("files")
+          .select(sel)
+          .eq("class_id", entityId)
+          .order("created_at", { ascending: false })
+      : await supabase
+          .from("files")
+          .select(sel)
+          .eq("owner_id", entityId)
+          .order("created_at", { ascending: false });
+
+  let { data, error } = await run(fullSelect);
+  if (error) {
+    ({ data, error } = await run(legacySelect));
+  }
+
+  if (error || !data?.length) return [];
+
+  const rows = data as unknown as {
+    id: string;
+    logical_key?: string | null;
+    mime?: string | null;
+    created_at?: string | null;
+    title?: string | null;
+    description?: string | null;
+  }[];
+
+  const ids = rows.map((f) => f.id);
+  const { data: vers } = await supabase
+    .from("file_versions")
+    .select("file_id,version,storage_path")
+    .in("file_id", ids);
+
+  const latest = new Map<string, { version: number; storagePath: string }>();
+  for (const v of vers ?? []) {
+    const fid = v.file_id as string;
+    const ver = Number(v.version);
+    const storagePath = String(v.storage_path ?? "");
+    const cur = latest.get(fid);
+    if (!cur || ver > cur.version) {
+      latest.set(fid, {
+        version: ver,
+        storagePath: storagePath || (cur?.storagePath ?? ""),
+      });
+    }
+  }
+
+  return rows.map((f) => {
+    const id = f.id;
+    const titleRaw = f.title?.trim();
+    const logicalKey = String(f.logical_key ?? "");
+    const lv = latest.get(id);
+    return {
+      id,
+      title: titleRaw || logicalKey,
+      description: String(f.description ?? ""),
+      mime: f.mime ?? null,
+      createdAt: String(f.created_at ?? ""),
+      version: lv?.version ?? 1,
+      storagePath: lv?.storagePath || null,
+    };
+  });
+}
+
+const CLOUD_DOCUMENTS_BUCKET = "documents";
+
+/** URL signée (lecture) pour chaque fichier ; null si pas de chemin ou erreur Storage. */
+export async function attachSignedUrlsToCloudFiles(
+  files: CloudFolderFileRow[],
+): Promise<CloudFolderFileWithUrl[]> {
+  const admin = createAdminSupabase();
+  if (!admin || files.length === 0) {
+    return files.map((f) => ({ ...f, signedUrl: null }));
+  }
+
+  const out: CloudFolderFileWithUrl[] = [];
+  for (const f of files) {
+    if (!f.storagePath) {
+      out.push({ ...f, signedUrl: null });
+      continue;
+    }
+    const { data, error } = await admin.storage
+      .from(CLOUD_DOCUMENTS_BUCKET)
+      .createSignedUrl(f.storagePath, 3600);
+    out.push({
+      ...f,
+      signedUrl: !error && data?.signedUrl ? data.signedUrl : null,
+    });
+  }
+  return out;
 }

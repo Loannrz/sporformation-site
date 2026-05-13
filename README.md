@@ -49,13 +49,13 @@ Buckets Storage recommandés : bucket `documents` avec limite ~50 Mo et filtra
 
 - **Dashboard** différencié (directeur / prof principal / professeur).
 - **Annonces** (fil + badges d’urgence).
-- **Cloud** explorateur avec onglets (classe · matière · intervenant · dossiers libres) et pages dossier type.
+- **Cloud** explorateur avec onglets (classe · professeur) et pages dossier type.
 - **Messagerie** liste + détail stylé Slack-like (historique fictif jusqu’à branchement DB / Realtime).
 - **Classes** liste + détail (élèves, sanctions de classe).
 - **Profil étudiant** : informations, liste des sanctions, formulaire « nouvelle sanction » (server action + **PDF `@react-pdf/renderer`** + email Resend si clé configurée), retrait sanction selon règles, téléchargement PDF pour direction / PP.
 - **Calendrier** : squelette vues jour/semaine/mois + événements démo.
 - **Administration** (direction uniquement `notFound()` pour les autres) : hub, **rôles + organigramme drag-and-drop** (`@dnd-kit`), comptes, classes.
-- **Profil intervenant**, **Paramètres** avec cartes de thème.
+- **Profil professeur**, **Paramètres** avec cartes de thème.
 - **API** `/api/pdf/sanction` — génération PDF (Node runtime).
 
 Les textes utilisateur sont traduits dans **`locales/*.json`** ; les PDF officiels utilisent un composant **`lib/pdf/sanction-official.tsx`** avec texte FR/EN selon le paramètre `locale`.

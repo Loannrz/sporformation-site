@@ -394,6 +394,7 @@ export async function createTeacherAction(
     }
 
     revalidatePath(`/${locale}/administration/comptes`);
+    revalidatePath(`/${locale}/cloud`);
     return { ok: true as const, id, linkedExistingAuth: true as const };
   } else {
     return {
@@ -438,6 +439,7 @@ export async function createTeacherAction(
   }
 
   revalidatePath(`/${locale}/administration/comptes`);
+  revalidatePath(`/${locale}/cloud`);
   return { ok: true as const, id };
 }
 
@@ -542,6 +544,7 @@ export async function updateTeacherProfileAction(
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);
   revalidatePath(`/${locale}/profil/${teacherId}`);
+  revalidatePath(`/${locale}/cloud`);
   return { ok: true as const };
 }
 
@@ -611,6 +614,7 @@ export async function markTeacherLeftEstablishmentAction(
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);
   revalidatePath(`/${locale}/profil/${teacherId}`);
+  revalidatePath(`/${locale}/cloud`);
   return { ok: true as const };
 }
 
@@ -643,6 +647,7 @@ export async function reactivateTeacherEstablishmentAction(
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);
   revalidatePath(`/${locale}/profil/${teacherId}`);
+  revalidatePath(`/${locale}/cloud`);
   return { ok: true as const };
 }
 
@@ -677,5 +682,6 @@ export async function deleteTeacherAndDocumentsAction(
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);
   revalidatePath(`/${locale}/profil/${teacherId}`);
+  revalidatePath(`/${locale}/cloud`);
   return { ok: true as const };
 }
