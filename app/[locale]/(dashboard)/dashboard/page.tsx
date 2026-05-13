@@ -1,0 +1,213 @@
+import { Link } from "@/i18n/navigation";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  MOCK_ANNOUNCEMENTS,
+  MOCK_CLASSES,
+  MOCK_SANCTIONS,
+  MOCK_STUDENTS,
+  allStaff,
+  fileStats,
+} from "@/lib/mock-data";
+import { hasPermission } from "@/lib/permissions";
+import { readSessionCookie } from "@/lib/session-server";
+import { format } from "date-fns";
+import { fr as frLocale, enUS } from "date-fns/locale";
+import { getTranslations } from "next-intl/server";
+import type { AppLocale } from "@/i18n/routing";
+
+export default async function DashboardPage({
+  params,
+}: {
+  params: { locale: AppLocale };
+}) {
+  const user = await readSessionCookie();
+  const t = await getTranslations({
+    locale: params.locale,
+    namespace: "dashboard",
+  });
+  const tAnnounce = await getTranslations({
+    locale: params.locale,
+    namespace: "announcements",
+  });
+  const locale = params.locale;
+  const dateLocale = locale === "fr" ? frLocale : enUS;
+
+  if (!user) {
+    return null;
+  }
+
+  const directorExtras = hasPermission(user, "VIEW_DIRECTOR_DASHBOARD");
+  const stats = fileStats();
+
+  const announcements = [...MOCK_ANNOUNCEMENTS].sort((a, b) => {
+    if (a.importance === b.importance) {
+      return (
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+    return a.importance === "urgent" ? -1 : 1;
+  });
+
+  const sanctionsPreview = MOCK_SANCTIONS.slice(0, 4);
+  const classScope =
+    user.role === "PROF_PRINCIPAL" ? user.principalClassIds ?? [] : [];
+
+  const scopedSanctions =
+    user.role === "PROF_PRINCIPAL"
+      ? MOCK_SANCTIONS.filter((s) => {
+          const stu = MOCK_STUDENTS.find((st) => st.id === s.studentId);
+          return stu ? classScope.includes(stu.classId) : false;
+        }).slice(0, 4)
+      : sanctionsPreview;
+
+  return (
+    <div className="space-y-10">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {t("welcome", { name: user.firstName })}
+        </h1>
+        <p className="text-muted-foreground">
+          {directorExtras
+            ? t("subtitleDirector")
+            : user.role === "PROF_PRINCIPAL"
+              ? t("subtitlePrincipal")
+              : t("subtitleTeacher")}
+        </p>
+      </header>
+
+      {directorExtras && (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label={t("statsTeachers")}
+            value={`${allStaff.length}`}
+          />
+          <StatCard
+            label={t("statsStudents")}
+            value={`${MOCK_CLASSES.reduce((a, c) => a + c.studentIds.length, 0)}`}
+          />
+          <StatCard label={t("statsClasses")} value={`${MOCK_CLASSES.length}`} />
+          <StatCard label={t("statsFiles")} value={`${stats.total}`} />
+        </section>
+      )}
+
+      {!directorExtras && user.role === "PROF_PRINCIPAL" && (
+        <section className="grid gap-4 md:grid-cols-2">
+          <Card className="border-primary/20 bg-primary/5 shadow-none">
+            <CardHeader>
+              <CardTitle>{t("myClasses")}</CardTitle>
+              <CardDescription>
+                {classScope.length
+                  ? classScope.join(", ")
+                  : t("quickStudents")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {classScope.map((cid) => (
+                <Link key={cid} href={`/classes/${cid}`}>
+                  <Badge variant="outline" className="cursor-pointer px-3 py-1">
+                    {MOCK_CLASSES.find((c) => c.id === cid)?.name ?? cid}
+                  </Badge>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      <section className="grid gap-6 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>{t("recentSanctions")}</CardTitle>
+              <CardDescription>SPORFORMATION discipline</CardDescription>
+            </div>
+            <Badge variant="accent">Live</Badge>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(user.role === "PROF_PRINCIPAL" ? scopedSanctions : sanctionsPreview).map(
+              (s) => (
+                <div
+                  key={s.id}
+                  className="flex flex-col gap-2 rounded-lg border border-border/80 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="text-sm font-semibold">{s.type}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(s.date), "PPp", { locale: dateLocale })}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                      {s.description}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={s.status === "active" ? "default" : "secondary"}
+                  >
+                    {s.status}
+                  </Badge>
+                </div>
+              ),
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2 border-primary/25 dark:border-primary/15">
+          <CardHeader>
+            <CardTitle>
+              {directorExtras ? t("createAnnouncement") : tAnnounce("title")}
+            </CardTitle>
+            <CardDescription>{tAnnounce("subtitle")}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {announcements.map((a) => (
+              <article
+                key={a.id}
+                className="rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm transition hover:border-primary/35"
+              >
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant={a.importance === "urgent" ? "urgent" : "secondary"}
+                  >
+                    {a.importance}
+                  </Badge>
+                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {format(new Date(a.createdAt), "d MMM yyyy", {
+                      locale: dateLocale,
+                    })}
+                  </span>
+                </div>
+                <p className="text-sm font-semibold leading-snug">{a.title}</p>
+                <div
+                  className="prose prose-sm mt-2 max-w-none dark:prose-invert"
+                  dangerouslySetInnerHTML={{ __html: a.html }}
+                />
+              </article>
+            ))}
+            {directorExtras && (
+              <p className="text-xs text-muted-foreground">
+                Accès édition depuis /administration (flux Supabase).
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="border-none bg-gradient-to-br from-card to-muted/40 shadow-soft dark:shadow-soft-dark">
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-3xl">{value}</CardTitle>
+      </CardHeader>
+    </Card>
+  );
+}

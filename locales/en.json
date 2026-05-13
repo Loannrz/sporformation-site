@@ -1,0 +1,161 @@
+{
+  "meta": {
+    "title": "SPORFORMATION — Internal workspace",
+    "description": "Private space for leadership and faculty."
+  },
+  "common": {
+    "languageFr": "French",
+    "languageEn": "English",
+    "search": "Search",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "comingSoon": "Wire to your Supabase project and env vars to enable these flows.",
+    "online": "Online",
+    "offline": "Offline",
+    "roleDirector": "Director",
+    "rolePrincipal": "Head teacher",
+    "roleTeacher": "Teacher",
+    "unread": "{count} unread",
+    "urgencyNormal": "Normal",
+    "urgencyUrgent": "Urgent"
+  },
+  "auth": {
+    "title": "Secure sign-in",
+    "subtitle": "SPORFORMATION intranet",
+    "demoTitle": "Development demo mode",
+    "demoSubtitle": "Pick a persona to browse the UX. Remove when Supabase Auth is enabled.",
+    "signInDirector": "Sign in as director",
+    "signInPrincipal": "Sign in as head teacher",
+    "signInTeacher": "Sign in as teacher",
+    "logout": "Sign out",
+    "brandedFooter": "Staff-only.",
+    "invitationNote": "In production: emailed invite links and passwords."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "announcements": "Announcements",
+    "cloud": "Cloud files",
+    "messaging": "Messaging",
+    "classes": "Classes",
+    "calendar": "Calendar",
+    "admin": "Administration",
+    "adminRoles": "Roles & org chart",
+    "adminAccounts": "Accounts",
+    "adminClasses": "Classes",
+    "settings": "Settings",
+    "profile": "Profile"
+  },
+  "dashboard": {
+    "welcome": "Hello, {name}",
+    "subtitleDirector": "Global pulse of your apprenticeships.",
+    "subtitlePrincipal": "Your classes and daily priorities.",
+    "subtitleTeacher": "Announcements, agenda and students in one click.",
+    "statsTeachers": "Staff",
+    "statsStudents": "Students",
+    "statsClasses": "Classes",
+    "statsFiles": "Files",
+    "recentSanctions": "Recent sanctions",
+    "recentUploads": "Latest cloud uploads",
+    "recentActivity": "Recent activity",
+    "createAnnouncement": "New announcement",
+    "myClasses": "My assigned classes",
+    "quickStudents": "Quick access to student profiles"
+  },
+  "announcements": {
+    "title": "Announcements",
+    "subtitle": "Stay aligned with leadership.",
+    "onlyDirectorCreate": "Only the director can create announcements."
+  },
+  "cloud": {
+    "title": "Cloud",
+    "subtitle": "Modern explorer by class, subject, or teacher.",
+    "tabsClass": "By class",
+    "tabsSubject": "By subject",
+    "tabsTeacher": "By teacher",
+    "tabsFree": "Free-form folders",
+    "searchPlaceholder": "Search for a file…",
+    "dropzone": "Drag & drop here or click to browse",
+    "preview": "Preview",
+    "versioning": "Versions",
+    "onlyDirectorDeletes": "Only the director can delete files.",
+    "maxSize": "Max 50 MB — PDF, Office, images only",
+    "openFolder": "Open folder"
+  },
+  "messaging": {
+    "title": "Internal mailbox",
+    "subtitle": "Private threads or realtime groups.",
+    "newGroup": "New group channel",
+    "searchPlaceholder": "Search conversations or snippets",
+    "unreadDigest": "Digest emails routed through Resend (see README)."
+  },
+  "calendar": {
+    "title": "Shared calendar",
+    "subtitle": "Day, week & month views plus timetable sync.",
+    "monthly": "Month",
+    "weekly": "Week",
+    "daily": "Day",
+    "addEventHint": "Directors & head teachers can create or edit events.",
+    "timetableClass": "Class timetable lives under Administration."
+  },
+  "classes": {
+    "title": "Classes",
+    "students": "Students",
+    "files": "Class files",
+    "sanctions": "Sanction feed",
+    "principal": "Head teacher",
+    "unnamed": "Class #{n}",
+    "subtitle": "{count} cohorts monitored this year."
+  },
+  "student": {
+    "title": "{first} {last}",
+    "generalInfo": "Informations",
+    "sanctions": "Discipline history",
+    "addSanction": "Add sanction",
+    "removeSanction": "Remove",
+    "pdfDownload": "Download official PDF",
+    "inactiveLogin": "Learner SSO disabled — planned rollout."
+  },
+  "sanctions": {
+    "types": {
+      "retard": "Lateness",
+      "absence": "Absence",
+      "comportement": "Behaviour",
+      "autre": "Other"
+    },
+    "statusActive": "Active",
+    "statusRetired": "Retired",
+    "retiredMeta": "Withdrawn by {name} on {date}",
+    "pdfSent": "Official PDF emailing hooks into Resend for the director inbox.",
+    "composeTitle": "New sanction notice",
+    "formType": "Incident category",
+    "formDetail": "Fact-based narrative"
+  },
+  "admin": {
+    "title": "Administration",
+    "rolesTitle": "Roles & org chart",
+    "accountsTitle": "Teacher accounts",
+    "classesTitle": "Class management",
+    "orgHint": "Drag hierarchy when Supabase data is connected.",
+    "permissionsMatrix": "Permission matrix",
+    "subtitle": "Tooling strictly for school leadership."
+  },
+  "settings": {
+    "title": "Paramètres du compte",
+    "subtitle": "Theme & regional prefs."
+  },
+  "org": {
+    "title": "Organization chart",
+    "assignPeople": "People anchored to bespoke roles."
+  },
+  "profiles": {
+    "directorActivity": "Connection logs restricted to directors",
+    "subtitle": "{role} since {joined}"
+  },
+  "cloudFolder": {
+    "items": "{count} items",
+    "breadcrumbsRoot": "Root"
+  }
+}

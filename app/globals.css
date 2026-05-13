@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 99%;
+    --foreground: 0 0% 6%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 41%;
+    --border: 0 0% 91%;
+    --input: 0 0% 91%;
+    --radius: 0.7rem;
+
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+  }
+
+  .dark {
+    --background: 0 0% 8%;
+    --foreground: 0 0% 96%;
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 93%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 64%;
+    --border: 0 0% 17%;
+    --input: 0 0% 17%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+.gradient-mesh {
+  background-image:
+    radial-gradient(
+      ellipse 140% 80% at 0% 0%,
+      rgb(244 162 97 / 0.22),
+      transparent 54%
+    ),
+    radial-gradient(
+      ellipse 100% 60% at 100% 0%,
+      rgb(230 57 70 / 0.2),
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 80% 50% at 50% 100%,
+      rgb(244 162 97 / 0.12),
+      transparent 52%
+    );
+}
+
+.gradient-mesh-dark {
+  background-image:
+    radial-gradient(
+      ellipse 120% 80% at 10% -10%,
+      rgb(230 57 70 / 0.28),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 90% 50% at 100% 0%,
+      rgb(244 162 97 / 0.15),
+      transparent 45%
+    );
+}
+
+.glass {
+  @apply border border-black/10 bg-white/65 shadow-soft backdrop-blur-xl dark:border-white/10 dark:bg-black/55 dark:shadow-soft-dark;
+}

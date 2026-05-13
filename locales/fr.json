@@ -1,0 +1,161 @@
+{
+  "meta": {
+    "title": "SPORFORMATION — Plateforme interne",
+    "description": "Espace réservé direction et équipe enseignante."
+  },
+  "common": {
+    "languageFr": "Français",
+    "languageEn": "English",
+    "search": "Rechercher",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "back": "Retour",
+    "comingSoon": "Connecté au schéma Supabase et à vos variables d’environnement pour activer ces actions.",
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "roleDirector": "Directeur",
+    "rolePrincipal": "Professeur principal",
+    "roleTeacher": "Professeur",
+    "unread": "{count} non lus",
+    "urgencyNormal": "Normale",
+    "urgencyUrgent": "Urgent"
+  },
+  "auth": {
+    "title": "Connexion sécurisée",
+    "subtitle": "Espace interne SPORFORMATION",
+    "demoTitle": "Mode démo développement",
+    "demoSubtitle": "Sélectionnez un rôle pour tester les interfaces. À retirer quand Supabase Auth est activé.",
+    "signInDirector": "Se connecter en directeur",
+    "signInPrincipal": "Se connecter en prof principal",
+    "signInTeacher": "Se connecter en professeur",
+    "logout": "Déconnexion",
+    "brandedFooter": "Réservé au personnel.",
+    "invitationNote": "En production : invitation email + lien et mot de passe."
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "announcements": "Annonces",
+    "cloud": "Cloud fichiers",
+    "messaging": "Messagerie",
+    "classes": "Classes",
+    "calendar": "Calendrier",
+    "admin": "Administration",
+    "adminRoles": "Rôles & organigramme",
+    "adminAccounts": "Comptes",
+    "adminClasses": "Classes",
+    "settings": "Paramètres",
+    "profile": "Profil"
+  },
+  "dashboard": {
+    "welcome": "Bonjour, {name}",
+    "subtitleDirector": "Vue globale de l’alternance.",
+    "subtitlePrincipal": "Vos classes et priorités quotidiennes.",
+    "subtitleTeacher": "Annonces, agenda et élèves en un clic.",
+    "statsTeachers": "Intervenants",
+    "statsStudents": "Étudiants",
+    "statsClasses": "Classes",
+    "statsFiles": "Fichiers",
+    "recentSanctions": "Sanctions récentes",
+    "recentUploads": "Derniers fichiers cloud",
+    "recentActivity": "Activité récente",
+    "createAnnouncement": "Nouvelle annonce",
+    "myClasses": "Mes classes assignées",
+    "quickStudents": "Accès rapide profils élèves"
+  },
+  "announcements": {
+    "title": "Annonces",
+    "subtitle": "Restez alignés avec la direction.",
+    "onlyDirectorCreate": "Seul le directeur peut créer une annonce."
+  },
+  "cloud": {
+    "title": "Cloud",
+    "subtitle": "Explorateur de fichiers : classes, matières, intervenants.",
+    "tabsClass": "Par classe",
+    "tabsSubject": "Par matière",
+    "tabsTeacher": "Par intervenant",
+    "tabsFree": "Dossiers libres",
+    "searchPlaceholder": "Rechercher un fichier…",
+    "dropzone": "Déposez des fichiers ici ou cliquez pour parcourir",
+    "preview": "Aperçu",
+    "versioning": "Versions",
+    "onlyDirectorDeletes": "Seul le directeur peut retirer un fichier.",
+    "maxSize": "Max 50 Mo — PDF, Office, images",
+    "openFolder": "Ouvrir le dossier"
+  },
+  "messaging": {
+    "title": "Messagerie interne",
+    "subtitle": "Conversations privées ou groupes en direct.",
+    "newGroup": "Nouveau groupe",
+    "searchPlaceholder": "Rechercher une conversation ou un message",
+    "unreadDigest": "Email digest configuré depuis Resend (voir README)."
+  },
+  "calendar": {
+    "title": "Calendrier partagé",
+    "subtitle": "Vues jour / semaine / mois et emploi du temps.",
+    "monthly": "Mois",
+    "weekly": "Semaine",
+    "daily": "Jour",
+    "addEventHint": "Le directeur et les professeurs principaux peuvent créer ou modifier.",
+    "timetableClass": "Emploi du temps par classe (administration)."
+  },
+  "classes": {
+    "title": "Classes",
+    "students": "Étudiants",
+    "files": "Fichiers classe",
+    "sanctions": "Fil sanctions",
+    "principal": "Prof principal",
+    "unnamed": "Classe #{n}",
+    "subtitle": "{count} groupes suivis cette année."
+  },
+  "student": {
+    "title": "{first} {last}",
+    "generalInfo": "Informations",
+    "sanctions": "Historique sanctions",
+    "addSanction": "Ajouter une sanction",
+    "removeSanction": "Retirer",
+    "pdfDownload": "Télécharger le PDF officiel",
+    "inactiveLogin": "Compte élève désactivé (activation future)."
+  },
+  "sanctions": {
+    "formType": "Nature du signalement",
+    "formDetail": "Détail factuel et engageant",
+    "types": {
+      "retard": "Retard",
+      "absence": "Absence",
+      "comportement": "Comportement",
+      "autre": "Autre"
+    },
+    "statusActive": "Active",
+    "statusRetired": "Retirée",
+    "retiredMeta": "Retirée par {name} le {date}",
+    "pdfSent": "Le PDF officiel sera envoyé au directeur après branchement Resend.",
+    "composeTitle": "Nouvelle sanction"
+  },
+  "admin": {
+    "title": "Administration",
+    "rolesTitle": "Rôles et organigramme",
+    "accountsTitle": "Comptes enseignants",
+    "classesTitle": "Gestion classes",
+    "orgHint": "Drag & drop prévu lorsque données Supabase disponibles.",
+    "permissionsMatrix": "Matrice des permissions",
+    "subtitle": "Outils réservés à la direction."
+  },
+  "settings": {
+    "title": "Paramètres du compte",
+    "subtitle": "Thème et préférences régionales."
+  },
+  "org": {
+    "title": "Organigramme",
+    "assignPeople": "Personnes attachées aux rôles personnalisés"
+  },
+  "profiles": {
+    "directorActivity": "Historique connexions réservée direction",
+    "subtitle": "{role} depuis {joined}"
+  },
+  "cloudFolder": {
+    "items": "{count} éléments",
+    "breadcrumbsRoot": "Racine"
+  }
+}
