@@ -21,6 +21,12 @@ import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useState, useTransition, type FormEvent } from "react";
+import {
+  StudentExtendedFieldsForm,
+  emptyStudentExtended,
+  extendedToInput,
+  type StudentExtendedFormState,
+} from "@/components/admin/student-extended-fields-form";
 
 type Props = { locale: AppLocale; classOptions: AdminClassOption[] };
 
@@ -38,6 +44,9 @@ export function CreateStudentModal({ locale, classOptions }: Props) {
   const [birthDate, setBirthDate] = useState("");
   const [sex, setSex] = useState<string>("");
   const [birthPlace, setBirthPlace] = useState("");
+  const [extended, setExtended] = useState<StudentExtendedFormState>(
+    emptyStudentExtended(),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
@@ -49,6 +58,7 @@ export function CreateStudentModal({ locale, classOptions }: Props) {
     setBirthDate("");
     setSex("");
     setBirthPlace("");
+    setExtended(emptyStudentExtended());
     setError(null);
   };
 
@@ -76,6 +86,7 @@ export function CreateStudentModal({ locale, classOptions }: Props) {
         birthDate: birthDate || null,
         sex: sex || null,
         birthPlace: birthPlace.trim() || null,
+        extended: extendedToInput(extended),
       });
       if (!res.ok) {
         setError(
@@ -107,7 +118,7 @@ export function CreateStudentModal({ locale, classOptions }: Props) {
           {t("createButton")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[min(90vh,720px)] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[min(90vh,820px)] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("createTitle")}</DialogTitle>
           <DialogDescription>{t("createHint")}</DialogDescription>
@@ -204,6 +215,11 @@ export function CreateStudentModal({ locale, classOptions }: Props) {
               onChange={(e) => setEntryDate(e.target.value)}
             />
           </div>
+          <StudentExtendedFieldsForm
+            values={extended}
+            onChange={setExtended}
+            idPrefix="cs-ext"
+          />
           {error ? (
             <p className="text-sm text-destructive" role="alert">
               {error}

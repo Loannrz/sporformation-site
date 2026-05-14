@@ -1,9 +1,16 @@
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  STUDENT_FULL_SELECT,
+  STUDENT_BASE_SELECT,
+  STUDENT_EXTENDED_COLUMNS,
+  type StudentExtendedColumn,
+} from "@/lib/students-extended-fields";
 
 const STUDENT_ADMIN_SELECT = [
-  "id,first_name,last_name,email,photo_url,class_id,entry_date,birth_date,sex,birth_place",
+  STUDENT_FULL_SELECT,
+  STUDENT_BASE_SELECT,
   "id,first_name,last_name,email,photo_url,class_id,entry_date",
 ] as const;
 
@@ -21,12 +28,17 @@ export type StudentAdminListItem = {
   photoUrl: string | null;
 };
 
+export type StudentAdminExtendedFields = Partial<
+  Record<StudentExtendedColumn, string | null>
+>;
+
 export type StudentAdminDetail = StudentAdminListItem & {
   entryDate: string | null;
   principalDisplayName: string | null;
   sanctionsTotal: number;
   sanctionsActive: number;
   sanctionsRetard: number;
+  extended: StudentAdminExtendedFields;
 };
 
 function ageFromBirthDate(iso: string | null): number | null {
@@ -50,7 +62,20 @@ type StudentRowDb = {
   birth_date?: string | null;
   sex?: string | null;
   birth_place?: string | null;
-};
+} & Partial<Record<StudentExtendedColumn, string | null>>;
+
+function extractExtended(row: StudentRowDb): StudentAdminExtendedFields {
+  const out: StudentAdminExtendedFields = {};
+  for (const col of STUDENT_EXTENDED_COLUMNS) {
+    const v = row[col];
+    if (typeof v === "string" && v.trim() !== "") {
+      out[col] = v;
+    } else if (v === null) {
+      out[col] = null;
+    }
+  }
+  return out;
+}
 
 function mapListRow(
   r: StudentRowDb,
@@ -191,5 +216,6 @@ export async function fetchStudentAdminDetail(
     sanctionsTotal: sanctionStats.total,
     sanctionsActive: sanctionStats.active,
     sanctionsRetard: sanctionStats.retard,
+    extended: extractExtended(row),
   };
 }

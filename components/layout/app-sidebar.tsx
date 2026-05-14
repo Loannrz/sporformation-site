@@ -35,6 +35,7 @@ type NavLinkShellProps = {
   searchParams: URLSearchParams;
   disciplineOptions: DisciplineDialogOptions | null;
   notificationCount: number;
+  sanctionsReminderCount: number;
   linkCls: (active: boolean, iconOnly: boolean) => string;
   onNavigate: () => void;
 };
@@ -47,6 +48,7 @@ function SidebarNavLinks({
   searchParams,
   disciplineOptions,
   notificationCount,
+  sanctionsReminderCount,
   linkCls,
   onNavigate,
 }: NavLinkShellProps) {
@@ -73,15 +75,24 @@ function SidebarNavLinks({
         const linkKey = `${item.labelKey}-${href}`;
         const Icon = item.icon;
         const label = t(item.labelKey);
+        const showMsgBadge =
+          item.labelKey === "messaging" && notificationCount > 0;
+        const showSanctionsNavBadge =
+          item.labelKey === "adminSanctions" && sanctionsReminderCount > 0;
+        const badgeValue = showMsgBadge
+          ? notificationCount
+          : showSanctionsNavBadge
+            ? sanctionsReminderCount
+            : 0;
         const badge =
-          item.labelKey === "messaging" && notificationCount > 0 ? (
+          showMsgBadge || showSanctionsNavBadge ? (
             <span
               className={cn(
                 "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground",
                 !iconOnly && "ml-auto",
               )}
             >
-              {notificationCount > 9 ? "9+" : notificationCount}
+              {badgeValue > 9 ? "9+" : badgeValue}
             </span>
           ) : null;
 
@@ -95,7 +106,7 @@ function SidebarNavLinks({
               <Icon className="h-4 w-4 opacity-80" />
               {iconOnly && badge ? (
                 <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold leading-none text-primary-foreground">
-                  {notificationCount > 9 ? "+" : notificationCount}
+                  {badgeValue > 9 ? "+" : badgeValue}
                 </span>
               ) : null}
             </span>
@@ -132,6 +143,8 @@ type Props = {
   user: SessionUser;
   /** Ex. messages non lus — brancher sur une source temps réel plus tard. */
   notificationCount?: number;
+  /** Sanctions actives encore non vues par l’admin (badge + pastille avertissement). */
+  sanctionsReminderCount?: number;
   /** Données pour la modale « Avertissement » (null si non chargé). */
   disciplineOptions: DisciplineDialogOptions | null;
 };
@@ -139,6 +152,7 @@ type Props = {
 export function AppSidebar({
   user,
   notificationCount = 0,
+  sanctionsReminderCount = 0,
   disciplineOptions,
 }: Props) {
   const pathname = usePathname();
@@ -209,6 +223,7 @@ export function AppSidebar({
       pathname,
       disciplineOptions,
       notificationCount,
+      sanctionsReminderCount,
       linkCls,
       onNavigate: () => setDrawerOpen(false),
     }) satisfies Omit<NavLinkShellProps, "searchParams">;

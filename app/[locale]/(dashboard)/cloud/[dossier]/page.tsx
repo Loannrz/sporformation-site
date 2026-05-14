@@ -19,6 +19,7 @@ import {
 } from "@/lib/cloud-teacher-scope";
 import {
   attachSignedUrlsToCloudFiles,
+  collectStudentDepositAccessibleFolderIds,
   fetchAdminClassOptions,
   fetchClassCloudAudienceIndex,
   fetchCloudFolderFiles,
@@ -34,10 +35,13 @@ import {
   isClassFolderInStudentUploadTree,
   parseCloudFolderSlug,
   resolveCloudFolderHeading,
+  resolveStudentClassCloudDepositScope,
+  studentMayAccessClassCloudDepositFolder,
 } from "@/lib/data/school";
 import { getSessionUser } from "@/lib/session-server";
 import { mayCreateStudentInboxSubfolder } from "@/lib/roles";
 import { notFound } from "next/navigation";
+import { redirect } from "@/i18n/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +108,38 @@ export default async function CloudFolderPage({
       ? await fetchClassCloudFoldersFlat(parsed.id)
       : [];
 
+  let studentDepositNav:
+    | { landingFolderId: string; accessibleFolderIds: string[] }
+    | undefined;
+
+  if (user.role === "ELEVE" && parsed?.kind === "class") {
+    const depositScope = resolveStudentClassCloudDepositScope(classFolderRows);
+    if (!depositScope.landingFolderId) {
+      notFound();
+    }
+    studentDepositNav = {
+      landingFolderId: depositScope.landingFolderId,
+      accessibleFolderIds: collectStudentDepositAccessibleFolderIds(
+        classFolderRows,
+        depositScope,
+      ),
+    };
+    if (!currentFolderId) {
+      redirect({
+        href: `/cloud/${encodeURIComponent(params.dossier)}?folder=${depositScope.landingFolderId}`,
+        locale: params.locale,
+      });
+    }
+    if (
+      !studentMayAccessClassCloudDepositFolder(classFolderRows, currentFolderId)
+    ) {
+      redirect({
+        href: `/cloud/${encodeURIComponent(params.dossier)}?folder=${depositScope.landingFolderId}`,
+        locale: params.locale,
+      });
+    }
+  }
+
   const folderTree =
     parsed?.kind === "class" ? buildClassCloudFolderTree(classFolderRows) : [];
 
@@ -113,6 +149,10 @@ export default async function CloudFolderPage({
         ? flattenClassCloudStudentInboxOptions(
             folderTree,
             t("studentInboxPlacementRoot"),
+          ).filter((opt) =>
+            studentDepositNav
+              ? studentDepositNav.accessibleFolderIds.includes(opt.id)
+              : false,
           )
         : flattenClassCloudFolderOptions(folderTree, t("uploadFolderRoot"))
       : [];
@@ -192,7 +232,10 @@ export default async function CloudFolderPage({
     parsed?.kind === "class" ? getStudentInboxFolderId(classFolderRows) : null;
   const inStudentDepositZone =
     parsed?.kind === "class" &&
-    isClassFolderInStudentUploadTree(classFolderRows, currentFolderId);
+    currentFolderId !== null &&
+    (user.role === "ELEVE" && studentDepositNav
+      ? studentDepositNav.accessibleFolderIds.includes(currentFolderId)
+      : isClassFolderInStudentUploadTree(classFolderRows, currentFolderId));
   const allowTeacherInboxSubfolder =
     parsed?.kind === "class" &&
     Boolean(currentFolderId) &&
@@ -272,11 +315,13 @@ export default async function CloudFolderPage({
           files={files}
           viewerId={user.id}
           viewerIsDirector={viewerIsDirector}
+          viewerStudentId={user.role === "ELEVE" ? user.studentId ?? null : null}
           classOptions={classOptions}
           studentOptions={studentOptions}
           folderSlug={params.dossier}
           folderOptionsForClass={{ classId: parsed.id, options: folderPick }}
           initialAudienceTab={initialAudienceTab}
+          studentDepositNav={studentDepositNav}
           studentSubfolderCreate={
             allowTeacherInboxSubfolder && currentFolderId
               ? { classId: parsed.id, parentFolderId: currentFolderId }
@@ -306,6 +351,9 @@ export default async function CloudFolderPage({
                 locale={params.locale}
                 viewerId={user.id}
                 viewerIsDirector={viewerIsDirector}
+                viewerStudentId={
+                  user.role === "ELEVE" ? user.studentId ?? null : null
+                }
                 classOptions={classOptions}
                 studentOptions={studentOptions}
                 folderSlug={params.dossier}

@@ -12,6 +12,12 @@ import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useEffect, useState, useTransition, type FormEvent } from "react";
+import {
+  StudentExtendedFieldsForm,
+  extendedFromAdmin,
+  extendedToInput,
+  type StudentExtendedFormState,
+} from "@/components/admin/student-extended-fields-form";
 
 type Props = {
   locale: AppLocale;
@@ -42,6 +48,9 @@ export function StudentAdminDetailForm({
   );
   const [sex, setSex] = useState<string>(initial.sex ?? "");
   const [birthPlace, setBirthPlace] = useState(initial.birthPlace ?? "");
+  const [extended, setExtended] = useState<StudentExtendedFormState>(
+    extendedFromAdmin(initial.extended),
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,6 +62,7 @@ export function StudentAdminDetailForm({
     setBirthDate(initial.birthDate?.slice(0, 10) ?? "");
     setSex(initial.sex ?? "");
     setBirthPlace(initial.birthPlace ?? "");
+    setExtended(extendedFromAdmin(initial.extended));
   }, [initial]);
 
   const mapErr = (code: string) => {
@@ -79,6 +89,7 @@ export function StudentAdminDetailForm({
         birthDate: birthDate || null,
         sex: sex || null,
         birthPlace: birthPlace.trim() || null,
+        extended: extendedToInput(extended),
       });
       if (!res.ok) {
         const msg = mapErr(String(res.error));
@@ -183,6 +194,11 @@ export function StudentAdminDetailForm({
           />
         </div>
       </div>
+      <StudentExtendedFieldsForm
+        values={extended}
+        onChange={setExtended}
+        idPrefix="st-ext"
+      />
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}

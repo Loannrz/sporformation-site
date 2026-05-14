@@ -11,6 +11,7 @@ import {
 } from "@/lib/data/school";
 import type { ClassCloudFolderTemplateNode } from "@/lib/class-cloud-folder-template";
 import { STUDENT_INBOX_FOLDER_KIND } from "@/lib/cloud/class-cloud-folder-helpers";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -117,6 +118,15 @@ export async function createClassCloudFolderAction(
     return { ok: false, error: insErr?.message ?? "INSERT_FAILED" };
   }
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "FOLDER_CREATED",
+    entityType: "class_cloud_folder",
+    entityId: created.id as string,
+    entityLabel: name,
+    meta: { class_id: input.classId, parent_id: input.parentId },
+  });
+
   revalidateClassCloudPaths(locale, input.classId);
   return { ok: true, id: created.id as string };
 }
@@ -157,6 +167,15 @@ export async function renameClassCloudFolderAction(
 
   if (error) return { ok: false, error: error.message };
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "FOLDER_RENAMED",
+    entityType: "class_cloud_folder",
+    entityId: input.folderId,
+    entityLabel: name,
+    meta: { class_id: input.classId },
+  });
+
   revalidateClassCloudPaths(locale, input.classId);
   return { ok: true };
 }
@@ -180,13 +199,16 @@ export async function deleteClassCloudFolderAction(
 
   const { data: meta } = await admin
     .from("class_cloud_folders")
-    .select("id,is_system")
+    .select("id,name,is_system")
     .eq("id", input.folderId)
     .eq("class_id", input.classId)
     .maybeSingle();
   if ((meta as { is_system?: boolean } | null)?.is_system === true) {
     return { ok: false, error: "SYSTEM_FOLDER" };
   }
+
+  const folderName =
+    ((meta as { name?: string | null } | null)?.name ?? "").toString();
 
   const { error } = await admin
     .from("class_cloud_folders")
@@ -195,6 +217,15 @@ export async function deleteClassCloudFolderAction(
     .eq("class_id", input.classId);
 
   if (error) return { ok: false, error: error.message };
+
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "FOLDER_DELETED",
+    entityType: "class_cloud_folder",
+    entityId: input.folderId,
+    entityLabel: folderName || null,
+    meta: { class_id: input.classId },
+  });
 
   revalidateClassCloudPaths(locale, input.classId);
   return { ok: true };
@@ -428,6 +459,15 @@ export async function applyClassCloudFolderTemplateAction(
       null,
       roots,
     );
+    if (createdCount > 0) {
+      await logActivity({
+        ...actorFromSession(gate.user),
+        action: "FOLDER_TEMPLATE_APPLIED",
+        entityType: "class",
+        entityId: input.classId,
+        meta: { created_count: createdCount },
+      });
+    }
     revalidateClassCloudPaths(locale, input.classId);
     return { ok: true, createdCount };
   } catch (e) {
@@ -503,6 +543,15 @@ export async function createStudentInboxSubfolderAction(
   if (insErr || !created?.id) {
     return { ok: false, error: insErr?.message ?? "INSERT_FAILED" };
   }
+
+  await logActivity({
+    ...actorFromSession(user),
+    action: "STUDENT_INBOX_SUBFOLDER_CREATED",
+    entityType: "class_cloud_folder",
+    entityId: created.id as string,
+    entityLabel: name,
+    meta: { class_id: input.classId, parent_id: input.parentFolderId },
+  });
 
   revalidateClassCloudPaths(locale, input.classId);
   return { ok: true, id: created.id as string };

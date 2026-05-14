@@ -13,6 +13,7 @@ import {
   fetchMessagingDirectoryPeople,
 } from "@/lib/data/messaging";
 import { MessagingNewDiscussionButton } from "@/components/messaging/messaging-new-discussion-button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default async function MessagingIndexPage({
   params,
@@ -39,7 +40,7 @@ export default async function MessagingIndexPage({
 
   const [conversations, directory] = await Promise.all([
     fetchMessagingConversationsList(user.id, loc),
-    fetchMessagingDirectoryPeople(user.id, loc),
+    fetchMessagingDirectoryPeople(user.id, loc, user.role !== "ELEVE"),
   ]);
 
   return (
@@ -70,6 +71,22 @@ export default async function MessagingIndexPage({
                   href={`/messagerie/${c.id}`}
                   className="flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
+                  {!c.isGroup && c.peerAvatarUrl ? (
+                    <Avatar className="mt-0.5 h-11 w-11 shrink-0 border border-border shadow-sm">
+                      <AvatarImage src={c.peerAvatarUrl} alt="" />
+                      <AvatarFallback className="text-xs font-semibold">
+                        {c.title.trim().slice(0, 2).toUpperCase() || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <Avatar className="mt-0.5 h-11 w-11 shrink-0 border border-dashed border-muted-foreground/35 bg-muted/30">
+                      <AvatarFallback className="bg-transparent text-[11px] font-bold text-muted-foreground">
+                        {c.isGroup
+                          ? "#"
+                          : c.title.trim().slice(0, 2).toUpperCase() || "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-base font-semibold leading-tight">

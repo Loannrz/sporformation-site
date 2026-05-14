@@ -26,7 +26,7 @@ async function fetchStudentRowForAuthUser(
   const attemptFull = await supabase
     .from("students")
     .select(
-      "id,first_name,last_name,email,class_id,activated,auth_user_id",
+      "id,first_name,last_name,email,class_id,activated,auth_user_id,photo_url",
     )
     .eq("auth_user_id", userId)
     .maybeSingle();
@@ -36,7 +36,7 @@ async function fetchStudentRowForAuthUser(
 
   const slim = await supabase
     .from("students")
-    .select("id,first_name,last_name,email,class_id,auth_user_id")
+    .select("id,first_name,last_name,email,class_id,auth_user_id,photo_url")
     .eq("auth_user_id", userId)
     .maybeSingle();
 
@@ -50,7 +50,7 @@ async function fetchStudentRowForAuthUser(
   const attemptAdminFull = await admin
     .from("students")
     .select(
-      "id,first_name,last_name,email,class_id,activated,auth_user_id",
+      "id,first_name,last_name,email,class_id,activated,auth_user_id,photo_url",
     )
     .eq("auth_user_id", userId)
     .maybeSingle();
@@ -60,7 +60,7 @@ async function fetchStudentRowForAuthUser(
 
   const admSlim = await admin
     .from("students")
-    .select("id,first_name,last_name,email,class_id,auth_user_id")
+    .select("id,first_name,last_name,email,class_id,auth_user_id,photo_url")
     .eq("auth_user_id", userId)
     .maybeSingle();
 
@@ -185,12 +185,17 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     return null;
   }
 
+  const photoTrim = (
+    ((stu as { photo_url?: string | null }).photo_url ?? "") as string
+  ).trim();
+
   return {
     id: user.id,
     email: (stu.email as string | null) ?? user.email ?? "",
     firstName: String(stu.first_name ?? "").trim(),
     lastName: String(stu.last_name ?? "").trim(),
     role: "ELEVE",
+    ...(photoTrim ? { avatarUrl: photoTrim } : {}),
     studentId: stu.id as string,
     studentClassId:
       ((stu.class_id as string | null | undefined) ?? null) || null,

@@ -15,9 +15,33 @@ import type { AppLocale } from "@/i18n/routing";
 import { getSessionUser } from "@/lib/session-server";
 import type { SanctionType, SessionUser } from "@/types";
 import { sanctionTypeLabel } from "@/lib/sanction-labels";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
+
+async function fetchPrincipalEmailFromProfile(
+  supabase: SupabaseClient,
+  principalId: string | null | undefined,
+): Promise<string | null> {
+  if (!principalId) return null;
+  const { data } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", principalId)
+    .maybeSingle();
+  const e =
+    typeof (data as { email?: string } | null)?.email === "string"
+      ? String((data as { email: string }).email).trim()
+      : "";
+  return e.includes("@") ? e : null;
+}
 
 async function supabasePreferServiceRole() {
   return createAdminSupabase() ?? (await createServerSupabase());
+}
+
+function revalidateSanctionsHubPaths(locale: AppLocale) {
+  revalidatePath(`/${locale}/sanctions`);
+  revalidatePath(`/${locale}/admin/sanctions`);
 }
 
 async function applySingleStudentDiscipline(
@@ -62,6 +86,10 @@ async function applySingleStudentDiscipline(
   const cls = student.classId
     ? await fetchClassById(student.classId)
     : null;
+  const principalEmail = await fetchPrincipalEmailFromProfile(
+    supabase,
+    cls?.principalId,
+  );
 
   const authorName = `${user.firstName} ${user.lastName}`;
   const pdfLocale: "fr" | "en" = locale === "en" ? "en" : "fr";
@@ -86,6 +114,28 @@ async function applySingleStudentDiscipline(
     pdfBuffer: pdfBuffer as Buffer,
     filename: `sanction-${inserted.id}.pdf`,
     studentName: `${student.firstName} ${student.lastName}`,
+    headTeacherEmail: principalEmail,
+    classNameLabel: cls?.name ?? "—",
+    sanctionTypeLabel: typeLabel,
+    dateLabel: new Date(inserted.occurred_at).toLocaleString(
+      pdfLocale === "fr" ? "fr-FR" : "en-US",
+    ),
+    description: descTrim,
+    authorName,
+  });
+
+  await logActivity({
+    ...actorFromSession(user),
+    action: "SANCTION_CREATED",
+    entityType: "sanction",
+    entityId: inserted.id as string,
+    entityLabel: `${student.firstName} ${student.lastName}`.trim(),
+    meta: {
+      student_id: studentId,
+      class_id: student.classId ?? null,
+      sanction_type: type,
+      description: descTrim.slice(0, 280),
+    },
   });
 
   revalidatePath(`/${locale}/etudiants/${studentId}`);
@@ -93,6 +143,7 @@ async function applySingleStudentDiscipline(
     revalidatePath(`/${locale}/classes/${student.classId}`);
   }
   revalidatePath(`/${locale}/dashboard`);
+  revalidateSanctionsHubPaths(locale);
 }
 
 export async function addSanctionAction(formData: FormData) {
@@ -160,6 +211,19 @@ export async function addDisciplineReportsAction(formData: FormData) {
       throw new Error(insertErr.message);
     }
 
+    await logActivity({
+      ...actorFromSession(user),
+      action: "SANCTION_REPORTS_CREATED",
+      entityType: "class",
+      entityId: classId,
+      entityLabel: clazz.name,
+      meta: {
+        sanction_type: type,
+        description: description.slice(0, 280),
+        affected_count: studentIds.length,
+      },
+    });
+
     const pdfLocale: "fr" | "en" = locale === "en" ? "en" : "fr";
     const typeLabel = sanctionTypeLabel(type, pdfLocale);
 
@@ -174,6 +238,11 @@ export async function addDisciplineReportsAction(formData: FormData) {
         )
         .filter(Boolean) ?? [];
 
+    const principalEmail = await fetchPrincipalEmailFromProfile(
+      supabase,
+      clazz.principalId,
+    );
+
     await emailDisciplineClassBatchToDirector({
       className: clazz.name,
       count: studentIds.length,
@@ -183,10 +252,16 @@ export async function addDisciplineReportsAction(formData: FormData) {
         names.length > 0
           ? names
           : studentIds.map((id) => `Élève ${id.slice(0, 8)}…`),
+      headTeacherEmail: principalEmail,
+      authorName: `${user.firstName} ${user.lastName}`,
+      dateLabel: new Date().toLocaleString(
+        pdfLocale === "fr" ? "fr-FR" : "en-US",
+      ),
     });
 
     revalidatePath(`/${locale}/classes/${classId}`);
     revalidatePath(`/${locale}/dashboard`);
+    revalidateSanctionsHubPaths(locale);
     for (const sid of studentIds) {
       revalidatePath(`/${locale}/etudiants/${sid}`);
     }
@@ -249,9 +324,19 @@ export async function retireSanctionAction(formData: FormData) {
     throw new Error(updateErr.message);
   }
 
+  await logActivity({
+    ...actorFromSession(user),
+    action: "SANCTION_RETIRED",
+    entityType: "sanction",
+    entityId: sanctionId,
+    entityLabel: `${student.firstName} ${student.lastName}`.trim(),
+    meta: { student_id: studentId },
+  });
+
   revalidatePath(`/${locale}/etudiants/${studentId}`);
   if (student.classId) {
     revalidatePath(`/${locale}/classes/${student.classId}`);
   }
   revalidatePath(`/${locale}/dashboard`);
+  revalidateSanctionsHubPaths(locale);
 }

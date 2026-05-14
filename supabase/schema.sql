@@ -19,6 +19,7 @@ create table if not exists public.profiles (
   principal_class_ids uuid[] default '{}',
   subjects text[] default '{}',
   locale text default 'fr',
+  admin_sanctions_last_seen_at timestamptz default now(),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -42,6 +43,27 @@ create table if not exists public.students (
   birth_date date,
   sex text,
   birth_place text,
+  njs text,
+  promo text,
+  of_name text,
+  formation_number text,
+  diploma text,
+  tep text,
+  birth_country text,
+  birth_department text,
+  phone text,
+  address_line1 text,
+  address_line2 text,
+  postal_code text,
+  address_city text,
+  address_country text,
+  employment_status text,
+  parcoursup text,
+  validation_status text,
+  uc1_status text,
+  uc2_status text,
+  uc3_status text,
+  uc4_status text,
   auth_user_id uuid references auth.users(id),
   activated boolean default false,
   created_at timestamptz default now()
@@ -84,6 +106,7 @@ create table if not exists public.sanctions (
   type sanction_type not null default 'autre',
   occurred_at timestamptz not null default now(),
   description text not null,
+  title text,
   author_id uuid references public.profiles(id),
   status sanction_status not null default 'active',
   retired_at timestamptz,
@@ -125,6 +148,7 @@ create table if not exists public.conversations (
   is_group boolean default false,
   name text,
   created_by uuid references auth.users(id) on delete set null,
+  group_admin_profile_id uuid references auth.users(id) on delete set null,
   created_at timestamptz default now()
 );
 
@@ -139,8 +163,14 @@ create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid references public.conversations(id) on delete cascade,
   sender_id uuid references auth.users(id) on delete set null,
-  body text not null,
-  sent_at timestamptz default now()
+  kind text not null default 'user' check (kind in ('user','system')),
+  body text not null default '',
+  system_payload jsonb,
+  sent_at timestamptz default now(),
+  attachment_path text,
+  attachment_filename text,
+  attachment_mime text,
+  attachment_size_bytes bigint
 );
 
 do $$ begin create type announcement_priority as enum ('normal','urgent');

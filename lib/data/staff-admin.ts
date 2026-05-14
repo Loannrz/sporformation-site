@@ -198,8 +198,22 @@ export type PendingTeacherInviteRow = {
   role: UserRole;
   teacherEmploymentStatus: TeacherEmploymentStatus | null;
   principalClassIds: string[];
+  assignedClassIds: string[];
   createdAt: string | null;
 };
+
+function isMissingPendingSignupAssignedColumnError(err: {
+  code?: string | null;
+  message?: string | null;
+} | null | undefined): boolean {
+  if (!err) return false;
+  if (err.code === "42703") return true;
+  const m = (err.message ?? "").toLowerCase();
+  return (
+    m.includes("assigned_class_ids") &&
+    (m.includes("does not exist") || m.includes("column"))
+  );
+}
 
 export async function fetchPendingTeacherInvitesForAdmin(): Promise<
   PendingTeacherInviteRow[]
@@ -207,14 +221,31 @@ export async function fetchPendingTeacherInvitesForAdmin(): Promise<
   const admin = createAdminSupabase();
   if (!admin) return [];
 
-  const { data, error } = await admin
+  const fullSelect =
+    "email,first_name,last_name,base_role,teacher_employment_status,principal_class_ids,assigned_class_ids,created_at" as const;
+  const legacySelect =
+    "email,first_name,last_name,base_role,teacher_employment_status,principal_class_ids,created_at" as const;
+
+  let data: unknown[] | null = null;
+  const res = await admin
     .from("teacher_pending_signups")
-    .select(
-      "email,first_name,last_name,base_role,teacher_employment_status,principal_class_ids,created_at",
-    )
+    .select(fullSelect)
     .order("created_at", { ascending: false });
 
-  if (error || !data?.length) return [];
+  if (!res.error) {
+    data = res.data;
+  } else if (isMissingPendingSignupAssignedColumnError(res.error)) {
+    const fallback = await admin
+      .from("teacher_pending_signups")
+      .select(legacySelect)
+      .order("created_at", { ascending: false });
+    if (fallback.error || !fallback.data?.length) return [];
+    data = fallback.data;
+  } else {
+    return [];
+  }
+
+  if (!data?.length) return [];
 
   return (
     data as {
@@ -224,6 +255,7 @@ export async function fetchPendingTeacherInvitesForAdmin(): Promise<
       base_role: string;
       teacher_employment_status: string | null;
       principal_class_ids: string[] | null;
+      assigned_class_ids?: string[] | null;
       created_at: string | null;
     }[]
   ).map((row) => ({
@@ -234,6 +266,9 @@ export async function fetchPendingTeacherInvitesForAdmin(): Promise<
     teacherEmploymentStatus: (row.teacher_employment_status as TeacherEmploymentStatus) ?? null,
     principalClassIds: Array.isArray(row.principal_class_ids)
       ? row.principal_class_ids
+      : [],
+    assignedClassIds: Array.isArray(row.assigned_class_ids)
+      ? row.assigned_class_ids
       : [],
     createdAt: row.created_at ?? null,
   }));

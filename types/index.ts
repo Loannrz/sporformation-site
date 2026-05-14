@@ -57,6 +57,27 @@ export interface StudentProfile {
   birthDate?: string | null;
   sex?: string | null;
   birthPlace?: string | null;
+  njs?: string | null;
+  promo?: string | null;
+  ofName?: string | null;
+  formationNumber?: string | null;
+  diploma?: string | null;
+  tep?: string | null;
+  birthCountry?: string | null;
+  birthDepartment?: string | null;
+  phone?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  postalCode?: string | null;
+  addressCity?: string | null;
+  addressCountry?: string | null;
+  employmentStatus?: string | null;
+  parcoursup?: string | null;
+  validationStatus?: string | null;
+  uc1Status?: string | null;
+  uc2Status?: string | null;
+  uc3Status?: string | null;
+  uc4Status?: string | null;
 }
 
 export type SanctionType =
@@ -82,6 +103,8 @@ export interface Sanction {
   type: SanctionType;
   date: string;
   description: string;
+  /** Titre court optionnel (sinon l’interface affiche surtout le type). */
+  title?: string | null;
   authorId: string;
   authorName: string;
   status: SanctionStatus;

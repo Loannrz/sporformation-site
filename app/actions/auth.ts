@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { AppLocale } from "@/i18n/routing";
 import {
   initialSignInState,
   type SignInFormState,
 } from "@/lib/auth/sign-in-form-state";
+import { logActivity } from "@/lib/data/activity-logs";
 
 const emailLooksValid = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -86,6 +88,74 @@ function unreachableDevDetail(e: unknown): string | null {
   return e.message;
 }
 
+/**
+ * Journalise une connexion : tente d'identifier le profil ou la fiche élève
+ * pour distinguer la toute première connexion (`AUTH_SIGN_IN_FIRST`) du retour
+ * en se basant sur les traces déjà présentes dans `activity_logs`.
+ */
+async function recordSignInActivity(
+  userId: string | null,
+  emailLower: string,
+): Promise<void> {
+  try {
+    const admin = createAdminSupabase();
+    if (!admin || !userId) return;
+
+    let actorLabel: string | null = null;
+    let actorRole: string | null = null;
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("first_name,last_name,base_role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profile) {
+      const p = profile as {
+        first_name?: string | null;
+        last_name?: string | null;
+        base_role?: string | null;
+      };
+      actorLabel = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || emailLower;
+      actorRole = p.base_role ?? null;
+    } else {
+      const { data: student } = await admin
+        .from("students")
+        .select("first_name,last_name")
+        .eq("auth_user_id", userId)
+        .maybeSingle();
+      if (student) {
+        const s = student as {
+          first_name?: string | null;
+          last_name?: string | null;
+        };
+        actorLabel = `${s.first_name ?? ""} ${s.last_name ?? ""}`.trim() || emailLower;
+        actorRole = "ELEVE";
+      }
+    }
+
+    const { data: prior } = await admin
+      .from("activity_logs")
+      .select("id")
+      .eq("actor_id", userId)
+      .in("action", ["AUTH_SIGN_IN", "AUTH_SIGN_IN_FIRST"])
+      .limit(1);
+    const isFirst = !prior || prior.length === 0;
+
+    await logActivity({
+      actorId: userId,
+      actorLabel,
+      actorRole,
+      action: isFirst ? "AUTH_SIGN_IN_FIRST" : "AUTH_SIGN_IN",
+      entityType: "auth_user",
+      entityId: userId,
+      meta: { email: emailLower },
+    });
+  } catch {
+    // logging silencieux
+  }
+}
+
 export async function signInWithPasswordAction(
   _prevState: SignInFormState,
   formData: FormData,
@@ -122,7 +192,7 @@ export async function signInWithPasswordAction(
   }
 
   try {
-    const { error } = await client.auth.signInWithPassword({
+    const { data: signInData, error } = await client.auth.signInWithPassword({
       email,
       password,
     });
@@ -137,6 +207,8 @@ export async function signInWithPasswordAction(
       const { code, dev } = mapSupabaseAuthError(error);
       return { errorCode: code, devDetail: dev };
     }
+
+    await recordSignInActivity(signInData?.user?.id ?? null, email);
   } catch (e: unknown) {
     if (isSupabaseUnreachableError(e)) {
       return {
@@ -187,6 +259,13 @@ export async function completeFirstPasswordSetupAction(): Promise<{
   const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
 
   if (!error) {
+    await logActivity({
+      actorId: user.id,
+      actorLabel: user.email ?? null,
+      action: "AUTH_PASSWORD_FIRST_SET",
+      entityType: "auth_user",
+      entityId: user.id,
+    });
     revalidatePath("/", "layout");
     return { ok: true };
   }
@@ -201,6 +280,13 @@ export async function completeFirstPasswordSetupAction(): Promise<{
 
   if (e2) return { ok: false, error: error.message };
 
+  await logActivity({
+    actorId: user.id,
+    actorLabel: user.email ?? null,
+    action: "AUTH_PASSWORD_FIRST_SET",
+    entityType: "auth_user",
+    entityId: user.id,
+  });
   revalidatePath("/", "layout");
   return { ok: true };
 }

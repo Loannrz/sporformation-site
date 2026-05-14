@@ -7,6 +7,7 @@ export type BreadcrumbLabelKey =
   | "classes"
   | "calendar"
   | "admin"
+  | "adminSanctions"
   | "adminAnnouncements"
   | "adminCalendar"
   | "settings"
@@ -26,6 +27,7 @@ const STATIC: Record<string, BreadcrumbLabelKey> = {
   messagerie: "messaging",
   classes: "classes",
   calendrier: "calendar",
+  sanctions: "adminSanctions",
   parametres: "settings",
   settings: "settings",
   profil: "profile",
@@ -55,6 +57,10 @@ export function breadcrumbLabelKeyForSegment(
 
   if (lower === "announcements" && parent === "admin") {
     return "adminAnnouncements";
+  }
+
+  if (lower === "sanctions" && parent === "admin") {
+    return "adminSanctions";
   }
 
   if (lower === "calendar" && parent === "admin") {

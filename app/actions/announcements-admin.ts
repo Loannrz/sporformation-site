@@ -18,6 +18,8 @@ import { hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { announcementDescriptionToSafeHtml } from "@/lib/announcement-html";
+import { notifyAnnouncementAudience } from "@/lib/email/notify-announcement";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -89,22 +91,49 @@ export async function createAnnouncementAdminAction(
 
   const html = announcementDescriptionToSafeHtml(description);
 
-  const { error } = await admin.from("announcements").insert({
-    title,
-    html,
-    importance: "normal",
-    author_id: user.id,
-    audience,
-    logo_key: logoKey,
-    accent: accentKey,
-  });
+  const { data: inserted, error } = await admin
+    .from("announcements")
+    .insert({
+      title,
+      html,
+      importance: "normal",
+      author_id: user.id,
+      audience,
+      logo_key: logoKey,
+      accent: accentKey,
+    })
+    .select("id")
+    .maybeSingle();
 
-  if (error) {
-    console.error("announcement insert:", error.message);
+  if (error || !inserted?.id) {
+    if (error) {
+      console.error("announcement insert:", error.message);
+    }
     return { ok: false as const, error: "INSERT_FAILED" as const };
   }
 
+  await logActivity({
+    ...actorFromSession(user),
+    action: "ANNOUNCEMENT_CREATED",
+    entityType: "announcement",
+    entityId: inserted.id,
+    entityLabel: title,
+    meta: { audience },
+  });
+
   revalidateAnnouncementViews(locale);
+
+  try {
+    await notifyAnnouncementAudience({
+      admin,
+      locale,
+      audience,
+      title,
+      htmlBody: html,
+    });
+  } catch (e) {
+    console.error("[annonces/email]", e);
+  }
 
   return { ok: true as const };
 }
@@ -188,6 +217,15 @@ export async function updateAnnouncementAdminAction(
     return { ok: false as const, error: "UPDATE_FAILED" as const };
   }
 
+  await logActivity({
+    ...actorFromSession(user),
+    action: "ANNOUNCEMENT_UPDATED",
+    entityType: "announcement",
+    entityId: id,
+    entityLabel: title,
+    meta: { audience },
+  });
+
   revalidateAnnouncementViews(locale);
   return { ok: true as const };
 }
@@ -210,6 +248,13 @@ export async function deleteAnnouncementAdminAction(
     return { ok: false as const, error: "NO_SERVICE_ROLE" as const };
   }
 
+  const { data: snapshot } = await admin
+    .from("announcements")
+    .select("title")
+    .eq("id", id)
+    .maybeSingle();
+  const snapTitle = (snapshot as { title?: string | null } | null)?.title ?? null;
+
   const { data: deleted, error } = await admin
     .from("announcements")
     .delete()
@@ -224,6 +269,14 @@ export async function deleteAnnouncementAdminAction(
   if (!deleted) {
     return { ok: false as const, error: "NOT_FOUND" as const };
   }
+
+  await logActivity({
+    ...actorFromSession(user),
+    action: "ANNOUNCEMENT_DELETED",
+    entityType: "announcement",
+    entityId: id,
+    entityLabel: snapTitle,
+  });
 
   revalidateAnnouncementViews(locale);
   return { ok: true as const };

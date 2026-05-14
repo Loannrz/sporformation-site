@@ -27,7 +27,6 @@ import type { AppLocale } from "@/i18n/routing";
 import type { TeacherEmploymentStatus } from "@/types";
 import { useRouter } from "@/i18n/navigation";
 import { format, parseISO } from "date-fns";
-import { enUS, fr } from "date-fns/locale";
 import { Clock, GraduationCap, Mail, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
@@ -39,11 +38,11 @@ type Props = {
   classOptions: AdminClassOption[];
 };
 
-function formatInviteDate(value: string | null, locale: AppLocale): string | null {
+function formatInviteDate(value: string | null): string | null {
   if (!value?.trim()) return null;
   try {
     const d = parseISO(value.trim());
-    return format(d, "PPp", { locale: locale === "fr" ? fr : enUS });
+    return format(d, "yyyy-MM-dd HH:mm");
   } catch {
     return value;
   }
@@ -99,10 +98,14 @@ export function PendingTeacherInviteCard({
         })
       : [];
 
-  const invitedAt = formatInviteDate(invite.createdAt, locale);
+  const invitedAt = formatInviteDate(invite.createdAt);
 
   return (
-    <Card className="border-amber-500/35 bg-amber-500/[0.05] shadow-none ring-1 ring-amber-500/15 dark:bg-amber-500/[0.08] dark:ring-amber-400/20">
+    <Card className="relative border-amber-500/35 bg-amber-500/[0.05] shadow-sm ring-1 ring-amber-500/15 transition-[box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md dark:bg-amber-500/[0.08] dark:ring-amber-400/20">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-amber-500/15 to-transparent"
+      />
       <CardHeader className="space-y-2 pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge

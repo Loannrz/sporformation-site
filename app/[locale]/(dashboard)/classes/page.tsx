@@ -1,4 +1,4 @@
-import { Link } from "@/i18n/navigation";
+import { Link, redirect } from "@/i18n/navigation";
 import {
   Card,
   CardDescription,
@@ -9,13 +9,20 @@ import {
   fetchStaffClassesOverview,
   formatCloudClassDisplayName,
 } from "@/lib/data/school";
+import {
+  filterAndOrderStaffClassCards,
+  isViewerPrincipalClassCard,
+} from "@/lib/staff-classes-view";
+import { getSessionUser } from "@/lib/session-server";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
+import { cn } from "@/lib/utils";
 import {
   ChevronRight,
   ClipboardList,
   GraduationCap,
   Layers,
+  Pin,
   School,
 } from "lucide-react";
 
@@ -24,7 +31,17 @@ export default async function ClassesPage({
 }: {
   params: { locale: AppLocale };
 }) {
-  const classes = await fetchStaffClassesOverview();
+  const user = await getSessionUser();
+  if (!user) {
+    return null;
+  }
+
+  if (user.role === "ELEVE") {
+    redirect({ href: "/dashboard", locale: params.locale });
+  }
+
+  const rawCards = await fetchStaffClassesOverview();
+  const classes = filterAndOrderStaffClassCards(rawCards, user);
   const t = await getTranslations({
     locale: params.locale,
     namespace: "classes",
@@ -52,6 +69,7 @@ export default async function ClassesPage({
             c.academicYearStart ?? null,
             c.academicYearEnd ?? null,
           );
+          const isPinnedPrincipal = isViewerPrincipalClassCard(c.id, user);
           return (
             <Link
               key={c.id}
@@ -59,26 +77,63 @@ export default async function ClassesPage({
               className="group block outline-none ring-offset-background focus-visible:rounded-xl focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={t("cardOpenAria", { name: displayName })}
             >
-              <Card className="relative h-full overflow-hidden border-border bg-card transition-[border-color,box-shadow] hover:border-primary/20 hover:shadow-soft dark:hover:shadow-soft-dark">
+              <Card
+                className={cn(
+                  "relative h-full overflow-hidden border-border bg-card transition-[border-color,box-shadow] hover:shadow-soft dark:hover:shadow-soft-dark",
+                  isPinnedPrincipal
+                    ? "border-accent/35 hover:border-accent/45"
+                    : "hover:border-primary/20",
+                )}
+              >
                 <div
-                  className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-primary/90 to-accent/80"
+                  className={cn(
+                    "absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r",
+                    isPinnedPrincipal
+                      ? "from-violet-500/85 via-accent/75 to-teal-500/70"
+                      : "from-primary/90 to-accent/80",
+                  )}
                   aria-hidden
                 />
                 <CardHeader className="relative space-y-3 pt-6">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
                       <div
-                        className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+                        className={cn(
+                          "mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg",
+                          isPinnedPrincipal
+                            ? "bg-violet-500/12 text-violet-700 dark:bg-violet-400/15 dark:text-violet-200"
+                            : "bg-primary/10 text-primary",
+                        )}
                         aria-hidden
                       >
                         <Layers className="size-5" />
                       </div>
-                      <CardTitle className="text-xl font-semibold leading-snug transition-colors group-hover:text-primary">
-                        {displayName}
-                      </CardTitle>
+                      <div className="min-w-0 space-y-1">
+                        <CardTitle
+                          className={cn(
+                            "text-xl font-semibold leading-snug transition-colors",
+                            isPinnedPrincipal
+                              ? "group-hover:text-violet-700 dark:group-hover:text-violet-200"
+                              : "group-hover:text-primary",
+                          )}
+                        >
+                          {displayName}
+                        </CardTitle>
+                        {isPinnedPrincipal ? (
+                          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-700/90 dark:text-violet-300/95">
+                            <Pin className="size-3.5 shrink-0" aria-hidden />
+                            {t("principalPinnedBadge")}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                     <ChevronRight
-                      className="mt-1 size-5 shrink-0 text-muted-foreground/60 transition-all group-hover:translate-x-0.5 group-hover:text-primary"
+                      className={cn(
+                        "mt-1 size-5 shrink-0 text-muted-foreground/60 transition-all group-hover:translate-x-0.5",
+                        isPinnedPrincipal
+                          ? "group-hover:text-violet-700 dark:group-hover:text-violet-200"
+                          : "group-hover:text-primary",
+                      )}
                       aria-hidden
                     />
                   </div>

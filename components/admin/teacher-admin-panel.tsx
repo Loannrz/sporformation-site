@@ -196,7 +196,10 @@ export function TeacherAdminPanel({
         subjectsCsv,
         principalClassIds:
           role === "PROF_PRINCIPAL" ? principalClassIds : [],
-        assignedClassIds: role === "PROFESSEUR" ? assignedClassIds : [],
+        assignedClassIds:
+          role === "PROFESSEUR" || role === "PROF_PRINCIPAL"
+            ? assignedClassIds
+            : [],
       });
       if (!res.ok) {
         setError(mapErr(String(res.error)));
@@ -412,16 +415,27 @@ export function TeacherAdminPanel({
               emptyHint={t("principalClassesEmpty")}
               classOptions={classOptions}
               value={principalClassIds}
-              onChange={setPrincipalClassIds}
+              onChange={(ids) => {
+                setPrincipalClassIds(ids);
+                setAssignedClassIds((prev) =>
+                  prev.filter((x) => !ids.includes(x)),
+                );
+              }}
             />
           ) : null}
-          {role === "PROFESSEUR" ? (
+          {role === "PROFESSEUR" || role === "PROF_PRINCIPAL" ? (
             <PrincipalClassPicker
               id="ed-assigned-classes"
               label={t("assignedClassesLabel")}
               help={t("assignedClassesHelp")}
               emptyHint={t("assignedClassesEmpty")}
-              classOptions={classOptions}
+              classOptions={
+                role === "PROF_PRINCIPAL"
+                  ? classOptions.filter(
+                      (c) => !principalClassIds.includes(c.id),
+                    )
+                  : classOptions
+              }
               value={assignedClassIds}
               onChange={setAssignedClassIds}
             />

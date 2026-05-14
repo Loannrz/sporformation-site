@@ -1,16 +1,16 @@
 import type { SessionUser } from "@/types";
-import { hasPermission } from "@/lib/permissions";
+import { canAccessSanctionsHub, hasPermission } from "@/lib/permissions";
 import { isStaffAdmin } from "@/lib/roles";
 import {
   LayoutDashboard,
   Megaphone,
   Cloud,
-  Files,
   MessageSquare,
   Users,
   CalendarDays,
   Shield,
   AlertTriangle,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -18,12 +18,12 @@ export type NavLabelKey =
   | "dashboard"
   | "announcements"
   | "cloud"
-  | "files"
   | "messaging"
   | "classes"
   | "calendar"
   | "warnings"
-  | "admin";
+  | "admin"
+  | "adminSanctions";
 
 export type NavItem =
   | {
@@ -44,7 +44,6 @@ function staffShowsLink(user: SessionUser, item: NavItem): boolean {
   if (item.kind !== "link") return false;
   switch (item.labelKey) {
     case "cloud":
-    case "files":
       return hasPermission(user, "UPLOAD_FILES");
     case "messaging":
       return hasPermission(user, "SEND_MESSAGES");
@@ -55,10 +54,10 @@ function staffShowsLink(user: SessionUser, item: NavItem): boolean {
   }
 }
 
-/** État actif de la sidebar : Cloud vs « tous les fichiers » partagent une partie du préfixe `/cloud`. */
+/** État actif sidebar : préfixe `/cloud` incluant l’accueil et les sous-routes dossier. */
 export function isNavLinkActive(
   pathname: string,
-  searchParams: URLSearchParams,
+  _searchParams: URLSearchParams,
   item: NavItem,
   _user: SessionUser,
 ): boolean {
@@ -69,16 +68,12 @@ export function isNavLinkActive(
 
   if (item.labelKey === "cloud") {
     if (pathname === "/cloud") {
-      return searchParams.get("tab") !== "all";
+      return true;
     }
     if (pathname.startsWith("/cloud/")) {
       return true;
     }
     return false;
-  }
-
-  if (item.labelKey === "files") {
-    return pathname === "/cloud" && searchParams.get("tab") === "all";
   }
 
   if (pathname === pathOnly) return true;
@@ -123,6 +118,15 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
       });
     }
 
+    if (canAccessSanctionsHub(user)) {
+      items.push({
+        kind: "link",
+        href: "/sanctions",
+        labelKey: "adminSanctions",
+        icon: ClipboardList,
+      });
+    }
+
     return items;
   }
 
@@ -147,12 +151,6 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
     },
     {
       kind: "link",
-      href: "/cloud?tab=all",
-      labelKey: "files",
-      icon: Files,
-    },
-    {
-      kind: "link",
       href: "/messagerie",
       labelKey: "messaging",
       icon: MessageSquare,
@@ -172,6 +170,15 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
   ];
 
   const filtered = core.filter((item) => staffShowsLink(user, item));
+
+  if (canAccessSanctionsHub(user)) {
+    filtered.push({
+      kind: "link",
+      href: "/sanctions",
+      labelKey: "adminSanctions",
+      icon: ClipboardList,
+    });
+  }
 
   if (hasPermission(user, "ADD_SANCTION")) {
     filtered.push({

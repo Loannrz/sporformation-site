@@ -49,6 +49,7 @@ export function CreateTeacherModal({
   const [bio, setBio] = useState("");
   const [subjectsCsv, setSubjectsCsv] = useState("");
   const [principalClassIds, setPrincipalClassIds] = useState<string[]>([]);
+  const [assignedClassIds, setAssignedClassIds] = useState<string[]>([]);
 
   const reset = () => {
     setEmail("");
@@ -58,6 +59,7 @@ export function CreateTeacherModal({
     setBio("");
     setSubjectsCsv("");
     setPrincipalClassIds([]);
+    setAssignedClassIds([]);
     setError(null);
   };
 
@@ -89,6 +91,10 @@ export function CreateTeacherModal({
           subjectsCsv: subjectsCsv.trim() || undefined,
           principalClassIds:
             role === "PROF_PRINCIPAL" ? principalClassIds : undefined,
+          assignedClassIds:
+            role === "PROFESSEUR" || role === "PROF_PRINCIPAL"
+              ? assignedClassIds
+              : undefined,
         });
       } catch {
         setError(t("errorGeneric"));
@@ -123,9 +129,11 @@ export function CreateTeacherModal({
                             ? t("errorPrincipalClassesRequired")
                             : err === "INVALID_PRINCIPAL_CLASSES"
                               ? t("errorInvalidPrincipalClasses")
-                              : typeof err === "string"
-                                ? err
-                                : t("errorGeneric"),
+                              : err === "INVALID_ASSIGNED_CLASSES"
+                                ? t("errorInvalidAssignedClasses")
+                                : typeof err === "string"
+                                  ? err
+                                  : t("errorGeneric"),
         );
         return;
       }
@@ -248,7 +256,29 @@ export function CreateTeacherModal({
                 emptyHint={t("principalClassesEmpty")}
                 classOptions={classOptions}
                 value={principalClassIds}
-                onChange={setPrincipalClassIds}
+                onChange={(ids) => {
+                  setPrincipalClassIds(ids);
+                  setAssignedClassIds((prev) =>
+                    prev.filter((x) => !ids.includes(x)),
+                  );
+                }}
+              />
+            ) : null}
+            {role === "PROFESSEUR" || role === "PROF_PRINCIPAL" ? (
+              <PrincipalClassPicker
+                id="ct-assigned-classes"
+                label={t("assignedClassesLabel")}
+                help={t("assignedClassesHelp")}
+                emptyHint={t("assignedClassesEmpty")}
+                classOptions={
+                  role === "PROF_PRINCIPAL"
+                    ? classOptions.filter(
+                        (c) => !principalClassIds.includes(c.id),
+                      )
+                    : classOptions
+                }
+                value={assignedClassIds}
+                onChange={setAssignedClassIds}
               />
             ) : null}
             <div className="space-y-2 sm:col-span-2">

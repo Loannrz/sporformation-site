@@ -59,12 +59,14 @@ export function CloudClassFolderPageBody({
   files,
   viewerId,
   viewerIsDirector,
+  viewerStudentId = null,
   classOptions,
   studentOptions,
   folderSlug,
   folderOptionsForClass,
   initialAudienceTab,
   studentSubfolderCreate,
+  studentDepositNav,
 }: {
   locale: AppLocale;
   viewerRole: UserRole;
@@ -78,6 +80,8 @@ export function CloudClassFolderPageBody({
   files: CloudFolderFileWithUrl[];
   viewerId: string;
   viewerIsDirector: boolean;
+  /** Si rôle élève, identifiant `students.id` permettant d'éditer ses dépôts. */
+  viewerStudentId?: string | null;
   classOptions: CloudClassSelectOption[];
   studentOptions: CloudStudentUploadOption[];
   folderSlug?: string | null;
@@ -86,6 +90,11 @@ export function CloudClassFolderPageBody({
   studentSubfolderCreate?: {
     classId: string;
     parentFolderId: string;
+  };
+  /** Navigation restreinte élève : racine dépôt + sous-arbre accessible. */
+  studentDepositNav?: {
+    landingFolderId: string;
+    accessibleFolderIds: string[];
   };
 }) {
   const t = useTranslations("cloud");
@@ -99,21 +108,32 @@ export function CloudClassFolderPageBody({
     return filterFilesForTab(files, audienceTab);
   }, [files, audienceTab, viewerRole]);
 
+  const accessibleFolderSet = useMemo(
+    () =>
+      studentDepositNav
+        ? new Set(studentDepositNav.accessibleFolderIds)
+        : null,
+    [studentDepositNav],
+  );
+
   const filteredSubfolders = useMemo(() => {
     if (viewerRole === "ELEVE") {
-      return subfolders.filter((sf) => {
-        if (currentFolderId === null) {
-          return (
-            sf.systemKind === STUDENT_INBOX_FOLDER_KIND ||
-            sf.name.trim() === "Documents des élèves"
-          );
-        }
-        return true;
-      });
+      if (!accessibleFolderSet) return [];
+      return subfolders.filter((sf) => accessibleFolderSet.has(sf.id));
     }
     /* Le personnel doit voir toute l’arborescence (dont les dossiers vides et le dossier système élèves) ; les onglets ci-dessus filtrent uniquement la liste des fichiers. */
     return subfolders;
-  }, [viewerRole, subfolders, currentFolderId]);
+  }, [viewerRole, subfolders, accessibleFolderSet]);
+
+  const studentDepositRootHref = studentDepositNav
+    ? `${folderLinkBase}?folder=${studentDepositNav.landingFolderId}`
+    : null;
+
+  const showStudentDepositNavUp =
+    studentDepositNav != null &&
+    studentDepositRootHref != null &&
+    currentFolderId !== null &&
+    currentFolderId !== studentDepositNav.landingFolderId;
 
   const hasAdminInIndex = useMemo(
     () =>
@@ -239,7 +259,20 @@ export function CloudClassFolderPageBody({
               </p>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {currentFolderId !== null ? (
+                {showStudentDepositNavUp && studentDepositRootHref ? (
+                  <Link
+                    href={studentDepositRootHref}
+                    className="group flex items-center gap-3 rounded-2xl border-2 border-dashed border-primary/25 bg-background/70 p-4 text-sm shadow-sm backdrop-blur-sm transition hover:border-primary/45 hover:bg-primary/[0.04] dark:bg-background/40"
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground transition group-hover:bg-primary/10 group-hover:text-primary">
+                      <ArrowLeft className="h-5 w-5" aria-hidden />
+                    </span>
+                    <span className="min-w-0 font-semibold leading-snug">
+                      {t("studentFolderNavDepositRoot")}
+                    </span>
+                  </Link>
+                ) : null}
+                {!studentDepositNav && currentFolderId !== null ? (
                   <Link
                     href={folderLinkBase}
                     className="group flex items-center gap-3 rounded-2xl border-2 border-dashed border-primary/25 bg-background/70 p-4 text-sm shadow-sm backdrop-blur-sm transition hover:border-primary/45 hover:bg-primary/[0.04] dark:bg-background/40"
@@ -291,13 +324,23 @@ export function CloudClassFolderPageBody({
         ) : null}
 
         {subfolders.length === 0 && currentFolderId !== null ? (
-          <Link
-            href={folderLinkBase}
-            className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm transition hover:border-primary/35 hover:bg-muted/50"
-          >
-            <ArrowLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
-            {t("classFolderBackRoot")}
-          </Link>
+          showStudentDepositNavUp && studentDepositRootHref ? (
+            <Link
+              href={studentDepositRootHref}
+              className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm transition hover:border-primary/35 hover:bg-muted/50"
+            >
+              <ArrowLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {t("studentFolderBackDepositRoot")}
+            </Link>
+          ) : (
+            <Link
+              href={folderLinkBase}
+              className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm transition hover:border-primary/35 hover:bg-muted/50"
+            >
+              <ArrowLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {t("classFolderBackRoot")}
+            </Link>
+          )
         ) : null}
 
         <div className="space-y-4 border-t border-border/40 pt-8">
@@ -315,6 +358,7 @@ export function CloudClassFolderPageBody({
               locale={locale}
               viewerId={viewerId}
               viewerIsDirector={viewerIsDirector}
+              viewerStudentId={viewerStudentId}
               classOptions={classOptions}
               studentOptions={studentOptions}
               folderSlug={folderSlug}

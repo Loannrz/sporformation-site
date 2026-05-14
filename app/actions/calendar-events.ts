@@ -9,6 +9,7 @@ import { getSessionUser } from "@/lib/session-server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { CalendarEventType } from "@/types";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -159,6 +160,18 @@ export async function createPersonalCalendarEventAction(
     console.error("personal calendar insert", error.message);
     return { ok: false as const, error: "INSERT_FAILED" as const };
   }
+
+  await logActivity({
+    ...actorFromSession(user),
+    action: "CALENDAR_PERSONAL_CREATED",
+    entityType: "calendar_event",
+    entityLabel: title,
+    meta: {
+      kind,
+      starts_at: start.toISOString(),
+      ends_at: end.toISOString(),
+    },
+  });
 
   revalidateCalendarViews(locale);
   return { ok: true as const };
@@ -319,6 +332,23 @@ export async function createSchoolCalendarEventAction(
     }
   }
 
+  await logActivity({
+    ...actorFromSession(user),
+    action: "CALENDAR_SCHOOL_CREATED",
+    entityType: "calendar_event",
+    entityId: rowId ?? null,
+    entityLabel: title,
+    meta: {
+      kind: insertRow.kind,
+      audience,
+      starts_at: insertRow.starts_at,
+      ends_at: insertRow.ends_at,
+      profile_count: profileIds.length,
+      class_count: classIds.length,
+      student_count: studentIds.length,
+    },
+  });
+
   revalidateCalendarViews(locale);
   return { ok: true as const };
 }
@@ -419,6 +449,20 @@ export async function updateCalendarEventAction(
     return { ok: false as const, error: "UPDATE_FAILED" as const };
   }
 
+  await logActivity({
+    ...actorFromSession(user),
+    action: "CALENDAR_EVENT_UPDATED",
+    entityType: "calendar_event",
+    entityId: id,
+    entityLabel: title,
+    meta: {
+      kind: patch.kind,
+      starts_at: patch.starts_at,
+      ends_at: patch.ends_at,
+      personal: isPersonal,
+    },
+  });
+
   revalidateCalendarViews(locale);
   return { ok: true as const };
 }
@@ -475,11 +519,28 @@ export async function deleteCalendarEventAction(
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
 
+  const { data: snapshot } = await db
+    .from("calendar_events")
+    .select("title")
+    .eq("id", id)
+    .maybeSingle();
+  const snapTitle =
+    (snapshot as { title?: string | null } | null)?.title ?? null;
+
   await db.from("calendar_event_targets").delete().eq("event_id", id);
   const { error } = await db.from("calendar_events").delete().eq("id", id);
   if (error) {
     return { ok: false as const, error: "DELETE_FAILED" as const };
   }
+
+  await logActivity({
+    ...actorFromSession(user),
+    action: "CALENDAR_EVENT_DELETED",
+    entityType: "calendar_event",
+    entityId: id,
+    entityLabel: snapTitle,
+    meta: { personal: isPersonal },
+  });
 
   revalidateCalendarViews(locale);
   return { ok: true as const };

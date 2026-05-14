@@ -13,6 +13,7 @@ import {
 } from "@/lib/teacher-signup-state";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { logActivity } from "@/lib/data/activity-logs";
 
 function isAuthEmailTakenError(err: { message?: string } | null | undefined): boolean {
   if (!err?.message) return false;
@@ -93,6 +94,7 @@ export async function teacherSelfSignupAction(
       bio: invite.bio as string | null,
       subjects: (invite.subjects as string[] | null) ?? [],
       principal_class_ids: (invite.principal_class_ids as string[] | null) ?? [],
+      assigned_class_ids: (invite.assigned_class_ids as string[] | null) ?? [],
     };
 
     const { data: created, error: cErr } = await admin.auth.admin.createUser({
@@ -130,6 +132,16 @@ export async function teacherSelfSignupAction(
           process.env.NODE_ENV === "development" ? fin.error : null,
       };
     }
+
+    await logActivity({
+      actorId: newId,
+      actorLabel: `${invitation.first_name} ${invitation.last_name}`.trim() || email,
+      actorRole: invitation.base_role,
+      action: "TEACHER_SELF_SIGNUP",
+      entityType: "profile",
+      entityId: newId,
+      meta: { email },
+    });
 
     const serverSb = await createServerSupabase();
     if (!serverSb) {

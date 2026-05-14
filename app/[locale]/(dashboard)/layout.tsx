@@ -8,6 +8,8 @@ import { redirect } from "@/i18n/navigation";
 import { hasPermission } from "@/lib/permissions";
 import { fetchDisciplineDialogOptions } from "@/lib/data/school";
 import { fetchTotalUnreadMessageCount } from "@/lib/data/messaging";
+import { isStaffAdmin } from "@/lib/roles";
+import { fetchAdminSanctionsNewCount } from "@/lib/data/sanctions-admin";
 
 export default async function DashboardGroupLayout({
   children,
@@ -27,11 +29,18 @@ export default async function DashboardGroupLayout({
         ? await fetchTotalUnreadMessageCount(user.id)
         : 0;
 
+    const sanctionsReminderCount =
+      isStaffAdmin(user)
+        ? await fetchAdminSanctionsNewCount(user.id)
+        : 0;
+
     return (
       <DashboardShell
         user={user}
         disciplineOptions={disciplineOptions}
         notificationCount={messagingUnread}
+        sanctionsReminderCount={sanctionsReminderCount}
+        locale={params.locale}
       >
         {children}
       </DashboardShell>

@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { AnnouncementLogoMark } from "@/components/announcements/announcement-logo-mark";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,7 +15,7 @@ import { teacherCloudScopedClassIds } from "@/lib/cloud-teacher-scope";
 import type { MessagingConversationListItem } from "@/lib/data/messaging";
 import type { DashboardDirectorStats } from "@/lib/data/school";
 import { formatCloudClassDisplayName } from "@/lib/format-cloud-class-display-name";
-import { hasPermission } from "@/lib/permissions";
+import { canAccessSanctionsHub, hasPermission } from "@/lib/permissions";
 import { isStaffAdmin } from "@/lib/roles";
 import { sanctionTypeLabel } from "@/lib/sanction-labels";
 import { cn } from "@/lib/utils";
@@ -157,7 +158,7 @@ export async function DashboardHome({
   const showEstablishmentStats = Boolean(directorStats);
 
   const canMessage = hasPermission(user, "SEND_MESSAGES");
-  const canSanctions = hasPermission(user, "VIEW_SANCTIONS");
+  const canSanctions = canAccessSanctionsHub(user);
   const canCalendar = hasPermission(user, "VIEW_CALENDAR");
   const canCloud =
     hasPermission(user, "UPLOAD_FILES") ||
@@ -508,10 +509,25 @@ export async function DashboardHome({
                       key={c.id}
                       href={`/messagerie/${c.id}`}
                       className={cn(
-                        "flex flex-col gap-1 rounded-lg border border-border/70 bg-muted/15 px-3 py-2 transition hover:bg-muted/30",
+                        "flex gap-2 rounded-lg border border-border/70 bg-muted/15 px-3 py-2 transition hover:bg-muted/30",
                         c.unreadCount > 0 && "border-primary/30 bg-primary/[0.06]",
                       )}
                     >
+                      {!c.isGroup && c.peerAvatarUrl ? (
+                        <Avatar className="mt-0.5 h-9 w-9 shrink-0 border border-border shadow-sm">
+                          <AvatarImage src={c.peerAvatarUrl} alt="" />
+                          <AvatarFallback className="text-[10px] font-semibold">
+                            {c.title.trim().slice(0, 2).toUpperCase() || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <Avatar className="mt-0.5 h-9 w-9 shrink-0 border border-dashed border-muted-foreground/35 bg-muted/30">
+                          <AvatarFallback className="bg-transparent text-[10px] font-bold text-muted-foreground">
+                            {c.isGroup ? "#" : c.title.trim().slice(0, 2).toUpperCase() || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm font-medium leading-snug">
                           {c.title}
@@ -535,6 +551,7 @@ export async function DashboardHome({
                           })}
                         </p>
                       ) : null}
+                      </div>
                     </Link>
                   ))
                 )}
@@ -544,18 +561,29 @@ export async function DashboardHome({
 
           {canSanctions ? (
             <Card className="shadow-none">
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle>{t("recentSanctions")}</CardTitle>
-                  <CardDescription>{t("recentSanctionsHint")}</CardDescription>
+                  <CardDescription className="flex flex-wrap items-center gap-2">
+                    <span>{t("recentSanctionsHint")}</span>
+                    <Badge variant="accent" className="text-[10px] font-semibold uppercase tracking-wide">
+                      {t("recentSanctionsLive")}
+                    </Badge>
+                  </CardDescription>
                 </div>
-                <Badge variant="accent">{t("recentSanctionsLive")}</Badge>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/sanctions">{t("sanctionsSeeAll")}</Link>
+                </Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 {sanctionsPreview.map((s) => (
                   <Link
                     key={s.id}
-                    href={`/etudiants/${s.studentId}`}
+                    href={
+                      user.role === "ELEVE"
+                        ? "/sanctions"
+                        : `/etudiants/${s.studentId}`
+                    }
                     className="flex flex-col gap-2 rounded-lg border border-border/80 bg-muted/20 p-4 transition hover:bg-muted/35 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0 flex-1 space-y-1">

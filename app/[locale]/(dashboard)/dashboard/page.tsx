@@ -8,7 +8,7 @@ import {
   fetchStudentDisplayNamesByIds,
 } from "@/lib/data/school";
 import { fetchMessagingConversationsList } from "@/lib/data/messaging";
-import { hasPermission } from "@/lib/permissions";
+import { canAccessSanctionsHub, hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -39,8 +39,8 @@ export default async function DashboardPage({
     studentClass,
   ] = await Promise.all([
     fetchAnnouncementsForUser(user),
-    hasPermission(user, "VIEW_SANCTIONS")
-      ? fetchRecentSanctionsForUser(user, 5)
+    canAccessSanctionsHub(user)
+      ? fetchRecentSanctionsForUser(user, 3)
       : Promise.resolve([]),
     showEstablishmentStats
       ? fetchDashboardDirectorStats()
@@ -57,7 +57,7 @@ export default async function DashboardPage({
   ]);
 
   const unreadTotal = messagingList.reduce((s, c) => s + c.unreadCount, 0);
-  const messagingPreview = messagingList.slice(0, 5);
+  const messagingPreview = messagingList.slice(0, 4);
 
   const sanctionStudentNames =
     sanctionsPreview.length > 0

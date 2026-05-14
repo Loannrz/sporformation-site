@@ -10,7 +10,7 @@ import type {
 } from "@/lib/data/staff-admin";
 import type { AppLocale } from "@/i18n/routing";
 import type { UserRole } from "@/types";
-import { Search } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
@@ -115,12 +115,16 @@ export function StaffAccountsSearchGrid({
     totalRows > 0 && filteredPending.length === 0 && filteredStaff.length === 0;
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
+    <div className="space-y-6">
+      <div className="space-y-3 rounded-2xl border border-border/70 bg-background/85 p-4 shadow-sm backdrop-blur sm:p-5">
         <label className="sr-only" htmlFor="staff-accounts-search">
           {t("listSearchLabel")}
         </label>
-        <div className="relative max-w-xl">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5" aria-hidden />
+          {t("listSearchLabel")}
+        </div>
+        <div className="relative max-w-2xl">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden
@@ -132,18 +136,20 @@ export function StaffAccountsSearchGrid({
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("listSearchPlaceholder")}
             autoComplete="off"
-            className="h-10 border-border/80 bg-background pl-9 shadow-sm"
+            className="h-11 border-border/80 bg-background pl-9 shadow-sm"
           />
         </div>
       </div>
 
       {showNoResults ? (
-        <p className="text-sm text-muted-foreground" role="status">
-          {t("listSearchNoResults")}
-        </p>
+        <div className="rounded-2xl border border-border/70 bg-muted/25 px-5 py-7 text-center shadow-sm">
+          <p className="text-sm text-muted-foreground" role="status">
+            {t("listSearchNoResults")}
+          </p>
+        </div>
       ) : null}
 
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {filteredPending.map((inv) => (
           <PendingTeacherInviteCard
             key={`pending:${inv.email}`}

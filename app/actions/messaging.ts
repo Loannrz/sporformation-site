@@ -10,6 +10,9 @@ import {
   getMaxMessageSentAt,
   userParticipatesInConversation,
 } from "@/lib/data/messaging";
+import { sanitizeStorageObjectFileName } from "@/lib/storage-filename";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
+import { notifyConversationParticipantsNewMessage } from "@/lib/email/notify-message";
 
 async function db() {
   const admin = createAdminSupabase();
@@ -26,6 +29,9 @@ async function requireMessagingUser() {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const STORAGE_BUCKET = "message_attachments";
 
 export async function createDirectConversationAction(
   locale: AppLocale,
@@ -113,6 +119,14 @@ export async function createDirectConversationAction(
     return { ok: false, error: pErr.message };
   }
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "MESSAGE_CONVERSATION_CREATED_DIRECT",
+    entityType: "conversation",
+    entityId: cid,
+    meta: { other_profile_id: otherProfileId },
+  });
+
   revalidatePath(`/${locale}/messagerie`);
   return { ok: true, conversationId: cid };
 }
@@ -150,6 +164,7 @@ export async function createGroupConversationAction(
       is_group: true,
       name,
       created_by: gate.user.id,
+      group_admin_profile_id: gate.user.id,
     })
     .select("id")
     .single();
@@ -172,45 +187,165 @@ export async function createGroupConversationAction(
     return { ok: false, error: pErr.message };
   }
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "MESSAGE_CONVERSATION_CREATED_GROUP",
+    entityType: "conversation",
+    entityId: cid,
+    entityLabel: name,
+    meta: {
+      member_count: participantRows.length,
+      member_profile_ids: unique,
+    },
+  });
+
   revalidatePath(`/${locale}/messagerie`);
   return { ok: true, conversationId: cid };
 }
 
 export async function sendMessageAction(
   locale: AppLocale,
-  input: { conversationId: string; body: string },
+  formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const gate = await requireMessagingUser();
   if (!gate.ok) return { ok: false, error: gate.error };
 
-  if (!UUID_RE.test(input.conversationId)) {
+  const conversationIdRaw = formData.get("conversationId");
+  const conversationId =
+    typeof conversationIdRaw === "string" ? conversationIdRaw.trim() : "";
+  if (!UUID_RE.test(conversationId)) {
     return { ok: false, error: "INVALID_CONVERSATION" };
   }
 
-  const body = input.body.trim().slice(0, 8000);
-  if (!body) {
+  const bodyRaw = formData.get("body");
+  const body =
+    typeof bodyRaw === "string" ? bodyRaw.trim().slice(0, 8000) : "";
+
+  const fileEntry = formData.get("file");
+  const file =
+    fileEntry instanceof File && fileEntry.size > 0 ? fileEntry : null;
+
+  if (!body && !file) {
     return { ok: false, error: "EMPTY_MESSAGE" };
   }
 
   const okPart = await userParticipatesInConversation(
     gate.user.id,
-    input.conversationId,
+    conversationId,
   );
   if (!okPart) return { ok: false, error: "NOT_PARTICIPANT" };
 
   const supabase = await db();
   if (!supabase) return { ok: false, error: "NO_DB" };
 
-  const { error } = await supabase.from("messages").insert({
-    conversation_id: input.conversationId,
-    sender_id: gate.user.id,
-    body,
+  if (file) {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      return { ok: false, error: "FILE_TOO_LARGE" };
+    }
+    const admin = createAdminSupabase();
+    if (!admin) return { ok: false, error: "NO_SERVICE_ROLE" };
+
+    const insertRes = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        sender_id: gate.user.id,
+        body,
+      })
+      .select("id")
+      .single();
+
+    if (insertRes.error || !(insertRes.data as { id?: string } | null)?.id) {
+      return {
+        ok: false,
+        error:
+          insertRes.error?.message?.slice(0, 240) ??
+          "ATTACH_UPLOAD_FAILED",
+      };
+    }
+
+    const messageId = (insertRes.data as { id: string }).id;
+    const safeName = sanitizeStorageObjectFileName(
+      file.name,
+      "piece-jointe",
+    );
+    const objectPath = `${conversationId}/${messageId}/${safeName}`;
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    const { error: upErr } = await admin.storage
+      .from(STORAGE_BUCKET)
+      .upload(objectPath, buffer, {
+        upsert: false,
+        contentType: file.type ? file.type : "application/octet-stream",
+      });
+
+    if (upErr) {
+      await admin.from("messages").delete().eq("id", messageId);
+      return {
+        ok: false,
+        error: "ATTACH_UPLOAD_FAILED",
+      };
+    }
+
+    const { error: patchErr } = await supabase
+      .from("messages")
+      .update({
+        attachment_path: objectPath,
+        attachment_filename: safeName,
+        attachment_mime: file.type || null,
+        attachment_size_bytes: file.size,
+      })
+      .eq("id", messageId);
+
+    if (patchErr) {
+      await admin.storage.from(STORAGE_BUCKET).remove([objectPath]);
+      await admin.from("messages").delete().eq("id", messageId);
+      return { ok: false, error: patchErr.message };
+    }
+  } else {
+    const { error } = await supabase.from("messages").insert({
+      conversation_id: conversationId,
+      sender_id: gate.user.id,
+      body,
+    });
+
+    if (error) return { ok: false, error: error.message };
+  }
+
+  const preview = body.length > 140 ? `${body.slice(0, 140)}…` : body;
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "MESSAGE_SENT",
+    entityType: "conversation",
+    entityId: conversationId,
+    meta: {
+      preview,
+      body_length: body.length,
+      has_attachment: Boolean(file),
+      attachment_filename: file?.name ?? null,
+      attachment_size_bytes: file?.size ?? null,
+    },
   });
 
-  if (error) return { ok: false, error: error.message };
+  const adminForEmail = createAdminSupabase();
+  if (adminForEmail) {
+    try {
+      await notifyConversationParticipantsNewMessage({
+        admin: adminForEmail,
+        conversationId,
+        senderAuthUserId: gate.user.id,
+        senderDisplayName: `${gate.user.firstName} ${gate.user.lastName}`,
+        locale,
+        bodyPreview: preview,
+        hadAttachment: Boolean(file),
+      });
+    } catch (e) {
+      console.error("[messagerie/email]", e);
+    }
+  }
 
   revalidatePath(`/${locale}/messagerie`);
-  revalidatePath(`/${locale}/messagerie/${input.conversationId}`);
+  revalidatePath(`/${locale}/messagerie/${conversationId}`);
   return { ok: true };
 }
 

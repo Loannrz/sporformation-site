@@ -1,6 +1,7 @@
 "use client";
 
 import { useTheme } from "next-themes";
+import { useTranslations } from "next-intl";
 import { Laptop, Moon, SunMedium } from "lucide-react";
 import {
   Card,
@@ -13,23 +14,24 @@ import { cn } from "@/lib/utils";
 
 /** Cartes pour basculer le thème clair · sombre · système. */
 export default function ThemeToggleCards() {
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const t = useTranslations("settings");
+  const { theme, setTheme } = useTheme();
 
   const presets = [
     {
-      label: "Clair",
+      labelKey: "themeLight" as const,
       value: "light",
       icon: SunMedium,
       blur: "from-primary/25",
     },
     {
-      label: "Sombre",
+      labelKey: "themeDark" as const,
       value: "dark",
       icon: Moon,
       blur: "from-accent/30",
     },
     {
-      label: "Automatique",
+      labelKey: "themeSystem" as const,
       value: "system",
       icon: Laptop,
       blur: "from-muted-foreground/20",
@@ -39,15 +41,12 @@ export default function ThemeToggleCards() {
   const current = theme ?? "system";
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Aspect</CardTitle>
-        <CardDescription>
-          next-themes synchronise la classe `.dark`. Thème système résolu :{" "}
-          <span className="font-semibold">{resolvedTheme ?? "—"}</span>.
-        </CardDescription>
+    <Card className="overflow-hidden border-border/80 shadow-sm">
+      <CardHeader className="border-b border-border/50 bg-muted/20 pb-4">
+        <CardTitle className="text-lg">{t("themeTitle")}</CardTitle>
+        <CardDescription>{t("themeDesc")}</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-3">
+      <CardContent className="grid gap-3 pt-6 sm:grid-cols-3">
         {presets.map((p) => {
           const Icon = p.icon;
           const active = current === p.value;
@@ -57,20 +56,22 @@ export default function ThemeToggleCards() {
               type="button"
               onClick={() => setTheme(p.value)}
               className={cn(
-                "relative overflow-hidden rounded-2xl border border-border px-4 py-6 text-left transition hover:border-primary/50",
-                active ? "border-primary/60 bg-muted/75" : "bg-muted/30",
+                "relative overflow-hidden rounded-2xl border px-4 py-5 text-left transition-all",
+                "hover:border-primary/45 hover:shadow-md",
+                active
+                  ? "border-primary/55 bg-primary/5 shadow-sm ring-2 ring-primary/20"
+                  : "border-border/80 bg-muted/25",
               )}
             >
               <div
                 className={cn(
-                  "pointer-events-none absolute inset-0 bg-gradient-to-br via-transparent opacity-65 blur-3xl",
+                  "pointer-events-none absolute inset-0 bg-gradient-to-br via-transparent opacity-60 blur-3xl",
                   p.blur,
                 )}
               />
-              <Icon className="relative z-10 h-6 w-6 text-primary" />
-              <p className="relative z-10 mt-4 font-semibold">{p.label}</p>
-              <p className="relative z-10 text-xs text-muted-foreground">
-                {p.value.toUpperCase()}
+              <Icon className="relative z-10 h-5 w-5 text-primary" />
+              <p className="relative z-10 mt-3 text-sm font-semibold leading-tight">
+                {t(p.labelKey)}
               </p>
             </button>
           );

@@ -29,6 +29,8 @@ type Props = {
   locale: AppLocale;
   viewerId: string;
   viewerIsDirector: boolean;
+  /** `students.id` du viewer s'il est élève (autorise l'édition de ses dépôts). */
+  viewerStudentId?: string | null;
   classOptions: CloudClassSelectOption[];
   studentOptions: CloudStudentUploadOption[];
   folderSlug?: string | null;
@@ -42,6 +44,7 @@ export function CloudFolderFileBrowser({
   locale,
   viewerId,
   viewerIsDirector,
+  viewerStudentId = null,
   classOptions,
   studentOptions,
   folderSlug = null,
@@ -205,6 +208,7 @@ export function CloudFolderFileBrowser({
           locale={locale}
           viewerId={viewerId}
           viewerIsDirector={viewerIsDirector}
+          viewerStudentId={viewerStudentId}
           classOptions={classOptions}
           studentOptions={studentOptions}
           folderSlug={folderSlug}

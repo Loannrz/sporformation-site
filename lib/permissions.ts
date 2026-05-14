@@ -55,6 +55,13 @@ const professorAllows: Partial<Record<PermissionKey, true>> = {
   VIEW_CALENDAR: true,
 };
 
+/** Hub / liste « sanctions actives » : personnel avec VIEW_SANCTIONS, ou élève (ses propres sanctions). */
+export function canAccessSanctionsHub(user: SessionUser | null): boolean {
+  if (!user) return false;
+  if (user.role === "ELEVE") return Boolean(user.studentId);
+  return hasPermission(user, "VIEW_SANCTIONS");
+}
+
 export function hasPermission(user: SessionUser | null, key: PermissionKey) {
   if (!user) return false;
   if (user.role === "ELEVE") {

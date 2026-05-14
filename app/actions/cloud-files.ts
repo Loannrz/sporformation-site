@@ -10,26 +10,23 @@ import type { CloudDocumentAudience } from "@/lib/cloud-document-audience";
 import { parseCloudDocumentAudienceFromForm } from "@/lib/cloud-document-audience";
 import {
   buildClassCloudFolderTree,
+  collectStudentDepositAccessibleFolderIds,
   fetchClassCloudFoldersFlat,
   flattenClassCloudFolderOptions,
   flattenClassCloudStudentInboxOptions,
-  isClassFolderInStudentUploadTree,
+  resolveStudentClassCloudDepositScope,
+  studentMayAccessClassCloudDepositFolder,
 } from "@/lib/data/school";
 import { hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
+import { sanitizeStorageObjectFileName } from "@/lib/storage-filename";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
 const CLASS_FOLDER_UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const MAX_BYTES = 50 * 1024 * 1024;
 const BUCKET = "documents";
-
-function sanitizeFileName(name: string): string {
-  const base = name
-    .replace(/^.*[/\\]/, "")
-    .replace(/[^\w.\- ()àâäéèêëïîôùûçÀÂÄÉÈÊËÏÎÔÙÛÇ]/gi, "_");
-  return base.slice(0, 180) || "document";
-}
 
 export type UploadCloudDocumentErrorCode =
   | "UNAUTH"
@@ -170,12 +167,14 @@ export async function uploadCloudDocumentAction(
       return { ok: false, error: "STUDENT_FOLDER_REQUIRED" };
     }
     const inboxRows = await fetchClassCloudFoldersFlat(classId);
-    if (!isClassFolderInStudentUploadTree(inboxRows, classFolderId)) {
+    if (
+      !studentMayAccessClassCloudDepositFolder(inboxRows, classFolderId)
+    ) {
       return { ok: false, error: "STUDENT_CLOUD_FORBIDDEN" };
     }
   }
 
-  const safeName = sanitizeFileName(file.name);
+  const safeName = sanitizeStorageObjectFileName(file.name);
   const fileId = randomUUID();
   const storagePath = `cloud/${fileId}/v${version}/${safeName}`;
 
@@ -193,13 +192,18 @@ export async function uploadCloudDocumentAction(
     };
   }
 
+  // Les élèves n'ont pas de ligne `profiles` : les FK owner_id / uploaded_by /
+  // actor_id (vers profiles.id) refuseraient l'insertion. Le déposant est
+  // identifié par files.student_id.
+  const profileActorId = user.role === "ELEVE" ? null : user.id;
+
   const row: Record<string, unknown> = {
     id: fileId,
     logical_key: fileId,
     bucket_id: BUCKET,
     current_path: storagePath,
     class_id: classId,
-    owner_id: user.id,
+    owner_id: profileActorId,
     student_id: studentId,
     mime: file.type || null,
     title: documentName,
@@ -224,7 +228,7 @@ export async function uploadCloudDocumentAction(
     file_id: fileId,
     storage_path: storagePath,
     version,
-    uploaded_by: user.id,
+    uploaded_by: profileActorId,
   });
   if (vErr) {
     await admin.from("files").delete().eq("id", fileId);
@@ -237,6 +241,25 @@ export async function uploadCloudDocumentAction(
   }
 
   const folderSlug = String(formData.get("folderSlug") ?? "").trim();
+
+  await logActivity({
+    ...actorFromSession(user),
+    actorId: profileActorId,
+    action: "FILE_UPLOADED",
+    entityType: "file",
+    entityId: fileId,
+    entityLabel: documentName,
+    meta: {
+      file_name: file.name,
+      mime: file.type || null,
+      size_bytes: file.size,
+      version,
+      class_id: classId,
+      student_id: studentId,
+      class_folder_id: classFolderId,
+      cloud_audience: cloudAudienceResolved,
+    },
+  });
 
   revalidatePath(`/${locale}/cloud`);
   if (folderSlug) {
@@ -271,10 +294,14 @@ export async function fetchClassCloudFolderPickOptionsAction(
     const rows = await fetchClassCloudFoldersFlat(classId);
     const tree = buildClassCloudFolderTree(rows);
     const t = await getTranslations({ locale, namespace: "cloud" });
+    const depositScope = resolveStudentClassCloudDepositScope(rows);
+    const allowed = new Set(
+      collectStudentDepositAccessibleFolderIds(rows, depositScope),
+    );
     const options = flattenClassCloudStudentInboxOptions(
       tree,
       t("studentInboxPlacementRoot"),
-    );
+    ).filter((opt) => allowed.has(opt.id));
     return { ok: true, options };
   }
 
@@ -363,7 +390,7 @@ export async function updateCloudDocumentMetadataAction(
 
   const { data: existing, error: fetchErr } = await admin
     .from("files")
-    .select("id,owner_id,class_id,class_folder_id")
+    .select("id,owner_id,class_id,class_folder_id,student_id")
     .eq("id", fileId)
     .maybeSingle();
 
@@ -404,7 +431,10 @@ export async function updateCloudDocumentMetadataAction(
       if (
         nextClassFolderId === null ||
         !classIdMerged ||
-        !isClassFolderInStudentUploadTree(inboxRows, nextClassFolderId)
+        !studentMayAccessClassCloudDepositFolder(
+          inboxRows,
+          nextClassFolderId,
+        )
       ) {
         return { ok: false, error: "FORBIDDEN", detail: "INVALID_FOLDER_MOVE" };
       }
@@ -413,9 +443,14 @@ export async function updateCloudDocumentMetadataAction(
 
   const depositorId =
     (existing.owner_id as string | null | undefined) ?? null;
+  const depositorStudentId =
+    (existing.student_id as string | null | undefined) ?? null;
   const mayEdit =
     user.role === "DIRECTEUR" ||
-    (depositorId !== null && depositorId === user.id);
+    (depositorId !== null && depositorId === user.id) ||
+    (user.role === "ELEVE" &&
+      !!user.studentId &&
+      depositorStudentId === user.studentId);
   if (!mayEdit) {
     return { ok: false, error: "FORBIDDEN" };
   }
@@ -441,6 +476,22 @@ export async function updateCloudDocumentMetadataAction(
       detail: updErr.message,
     };
   }
+
+  await logActivity({
+    ...actorFromSession(user),
+    actorId: user.role === "ELEVE" ? null : user.id,
+    action: "FILE_METADATA_UPDATED",
+    entityType: "file",
+    entityId: fileId,
+    entityLabel: title,
+    meta: {
+      class_id: classIdMerged,
+      student_id: studentId,
+      cloud_audience: cloudAudienceEdit,
+      class_folder_id:
+        nextClassFolderId !== undefined ? nextClassFolderId : undefined,
+    },
+  });
 
   const folderSlug = String(formData.get("folderSlug") ?? "").trim();
   revalidatePath(`/${locale}/cloud`);

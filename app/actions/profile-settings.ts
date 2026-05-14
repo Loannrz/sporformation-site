@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import type { AppLocale } from "@/i18n/routing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session-server";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
 export async function updateMyProfileAction(
   locale: AppLocale,
   input: {
     firstName: string;
     lastName: string;
-    email: string;
     bio: string;
     phone: string;
   },
@@ -21,15 +21,12 @@ export async function updateMyProfileAction(
   const supabase = await createServerSupabase();
   if (!supabase) return { ok: false as const, error: "NO_DB" as const };
 
-  /** L’adresse e-mail des comptes élèves est imposée par l’établissement ; pas de changement via ce formulaire. */
-  const email =
-    user.role === "ELEVE"
-      ? user.email.trim()
-      : input.email.trim();
+  /** L’e-mail n’est jamais modifié depuis ce formulaire (réservé au directeur en administration). */
+  const email = user.email.trim();
   const patch: Record<string, unknown> = {
     first_name: input.firstName.trim(),
     last_name: input.lastName.trim(),
-    email: email.length ? email : null,
+    ...(email.length ? { email } : {}),
     bio: input.bio.trim() || null,
     updated_at: new Date().toISOString(),
   };
@@ -45,10 +42,12 @@ export async function updateMyProfileAction(
 
   if (error) return { ok: false as const, error: error.message };
 
-  if (user.role !== "ELEVE" && email.length) {
-    const { error: authErr } = await supabase.auth.updateUser({ email });
-    if (authErr) return { ok: false as const, error: authErr.message };
-  }
+  await logActivity({
+    ...actorFromSession(user),
+    action: "PROFILE_UPDATED",
+    entityType: "profile",
+    entityId: user.id,
+  });
 
   revalidatePath(`/${locale}/parametres`);
   revalidatePath(`/${locale}/profil/${user.id}`);
@@ -77,6 +76,13 @@ export async function changeMyPasswordAction(input: {
     password: input.nextPassword,
   });
   if (error) return { ok: false as const, error: error.message };
+
+  await logActivity({
+    ...actorFromSession(user),
+    action: "AUTH_PASSWORD_CHANGED",
+    entityType: "auth_user",
+    entityId: user.id,
+  });
 
   return { ok: true as const };
 }

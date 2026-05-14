@@ -7,7 +7,6 @@ import {
   Users,
 } from "lucide-react";
 import { format } from "date-fns";
-import { fr, enUS } from "date-fns/locale";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -60,7 +59,6 @@ export async function StaffProfileDetail({
   const tc = await getTranslations({ locale, namespace: "common" });
   const ta = await getTranslations({ locale, namespace: "admin.accounts" });
 
-  const dateLocale = locale === "fr" ? fr : enUS;
   const initials =
     `${staff.firstName?.[0] ?? ""}${staff.lastName?.[0] ?? ""}`.toUpperCase() ||
     "?";
@@ -75,7 +73,7 @@ export async function StaffProfileDetail({
           : tc("roleTeacher");
 
   const joined = staff.joinedAt
-    ? format(new Date(staff.joinedAt), "PP", { locale: dateLocale })
+    ? format(new Date(staff.joinedAt), "yyyy-MM-dd")
     : tp("staffNoDate");
 
   const employmentLabel = (status: TeacherEmploymentStatus | null) => {
@@ -178,9 +176,7 @@ export async function StaffProfileDetail({
             {!staff.activeAtEstablishment && staff.leftEstablishmentOn ? (
               <p className="text-xs text-muted-foreground">
                 {ta("leftOnLabel")}:{" "}
-                {format(new Date(staff.leftEstablishmentOn), "PP", {
-                  locale: dateLocale,
-                })}
+                {format(new Date(staff.leftEstablishmentOn), "yyyy-MM-dd")}
               </p>
             ) : null}
           </div>

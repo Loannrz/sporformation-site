@@ -23,6 +23,8 @@ type Props = {
   locale: AppLocale;
   viewerId: string;
   viewerIsDirector: boolean;
+  /** Si défini, l'élève propriétaire (student.id) peut éditer ses dépôts. */
+  viewerStudentId?: string | null;
   classOptions: CloudClassSelectOption[];
   studentOptions: CloudStudentUploadOption[];
   folderSlug?: string | null;
@@ -34,6 +36,7 @@ export function CloudFolderFileGrid({
   locale,
   viewerId,
   viewerIsDirector,
+  viewerStudentId = null,
   classOptions,
   studentOptions,
   folderSlug = null,
@@ -41,14 +44,16 @@ export function CloudFolderFileGrid({
 }: Props) {
   const t = useTranslations("cloud");
 
-  const mayEditRow = (ownerId: string | null) =>
-    viewerIsDirector || Boolean(ownerId && ownerId === viewerId);
+  const mayEditRow = (ownerId: string | null, studentId: string | null) =>
+    viewerIsDirector ||
+    Boolean(ownerId && ownerId === viewerId) ||
+    Boolean(viewerStudentId && studentId && studentId === viewerStudentId);
 
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
       {files.map((f) => {
         const preview = f.signedUrl && isImageMime(f.mime);
-        const showEdit = mayEditRow(f.ownerId);
+        const showEdit = mayEditRow(f.ownerId, f.studentId);
         return (
           <div
             key={f.id}

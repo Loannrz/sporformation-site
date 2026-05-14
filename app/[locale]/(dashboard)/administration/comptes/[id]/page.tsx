@@ -81,13 +81,13 @@ export default async function AdminTeacherDetailPage({
   const emp = employmentBadge(staff.teacherEmploymentStatus);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <AdminBackLink
         href="/administration/comptes"
         label={ta("backToAccounts")}
       />
 
-      <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-md ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
+      <div className="overflow-hidden rounded-3xl border border-border/80 bg-card shadow-md ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
         <div
           className="h-1.5 bg-gradient-to-r from-primary/90 via-primary/70 to-accent/75"
           aria-hidden
@@ -96,7 +96,7 @@ export default async function AdminTeacherDetailPage({
           <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex min-w-0 gap-5">
               <div
-                className="flex size-[4.25rem] shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-xl font-semibold text-primary shadow-inner"
+                className="flex size-[4.5rem] shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/15 text-xl font-semibold text-primary shadow-inner ring-1 ring-primary/10"
                 aria-hidden
               >
                 {initials}
@@ -139,16 +139,18 @@ export default async function AdminTeacherDetailPage({
                 </div>
               </div>
             </div>
-            <Link
-              href={`/profil/${staff.id}`}
-              className={cn(
-                "inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-border/80 bg-background/90 px-4 py-2.5 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm",
-                "transition-colors hover:border-primary/35 hover:bg-muted/60",
-              )}
-            >
-              <ExternalLink className="size-4 opacity-70" aria-hidden />
-              {ta("openPublicProfile")}
-            </Link>
+            <div className="flex shrink-0 items-start">
+              <Link
+                href={`/profil/${staff.id}`}
+                className={cn(
+                  "inline-flex items-center justify-center gap-2 self-start rounded-xl border border-border/80 bg-background/90 px-4 py-2.5 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm",
+                  "transition-colors hover:border-primary/35 hover:bg-muted/60",
+                )}
+              >
+                <ExternalLink className="size-4 opacity-70" aria-hidden />
+                {ta("openPublicProfile")}
+              </Link>
+            </div>
           </div>
 
           <div className="mt-10 border-t border-border/60 pt-10">

@@ -26,7 +26,6 @@ import type { StaffAdminRow } from "@/lib/data/staff-admin";
 import type { AppLocale } from "@/i18n/routing";
 import type { TeacherEmploymentStatus, UserRole } from "@/types";
 import { format, parseISO } from "date-fns";
-import { enUS, fr } from "date-fns/locale";
 import {
   BookOpen,
   Calendar,
@@ -47,12 +46,12 @@ type Props = {
   classOptions: AdminClassOption[];
 };
 
-function formatJoinedDate(value: string | null, locale: AppLocale): string | null {
+function formatJoinedDate(value: string | null): string | null {
   if (!value?.trim()) return null;
   try {
     const raw = value.trim();
     const d = parseISO(raw.length <= 10 ? `${raw}T12:00:00` : raw);
-    return format(d, "PP", { locale: locale === "fr" ? fr : enUS });
+    return format(d, "yyyy-MM-dd");
   } catch {
     return value;
   }
@@ -125,7 +124,7 @@ export function StaffAccountCard({
   const subjectsShort =
     subjectsLine.length > 90 ? `${subjectsLine.slice(0, 87)}…` : subjectsLine;
 
-  const joinedFmt = formatJoinedDate(staff.joinedAt, locale);
+  const joinedFmt = formatJoinedDate(staff.joinedAt);
   const initials = `${staff.firstName?.[0] ?? ""}${staff.lastName?.[0] ?? ""}`.toUpperCase() || "?";
 
   const emp = employmentLabel(staff.teacherEmploymentStatus);
@@ -163,12 +162,16 @@ export function StaffAccountCard({
           lastName: staff.lastName,
         })}
       >
-        <Card className="flex h-full min-h-0 flex-1 flex-col overflow-hidden border-border/90 bg-card shadow-sm transition-[border-color,box-shadow] hover:border-primary/25 hover:shadow-md">
+        <Card className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden border-border/90 bg-card shadow-sm transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lg">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/[0.05] via-primary/[0.02] to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+          />
           <div
             className="h-1 shrink-0 bg-gradient-to-r from-primary/85 to-accent/75"
             aria-hidden
           />
-          <CardHeader className="shrink-0 space-y-4 pb-2">
+          <CardHeader className="relative shrink-0 space-y-4 pb-2">
             <div className="flex gap-3">
               <div
                 className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-base font-semibold text-primary"
@@ -210,7 +213,7 @@ export function StaffAccountCard({
               ) : null}
             </div>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col gap-2.5 pb-14 pt-0 text-sm text-muted-foreground">
+          <CardContent className="relative flex flex-1 flex-col gap-2.5 pb-14 pt-0 text-sm text-muted-foreground">
             {joinedFmt ? (
               <p className="flex items-start gap-2">
                 <Calendar className="mt-0.5 size-4 shrink-0 text-primary/70" aria-hidden />
@@ -258,7 +261,7 @@ export function StaffAccountCard({
                 </span>
               </p>
             ) : null}
-            <p className="mt-auto pt-1 text-xs text-primary/80 opacity-0 transition-opacity group-hover:opacity-100">
+            <p className="mt-auto pt-2 text-xs font-medium text-primary/85 opacity-0 transition-opacity group-hover:opacity-100">
               {t("listCardOpenHint")}
             </p>
           </CardContent>

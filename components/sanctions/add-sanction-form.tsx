@@ -12,9 +12,11 @@ import type { AppLocale } from "@/i18n/routing";
 type Props = {
   studentId: string;
   locale: AppLocale;
+  /** Dans une carte parente : pas de cadre ni titre dupliqué. */
+  embedded?: boolean;
 };
 
-export function AddSanctionForm({ studentId, locale }: Props) {
+export function AddSanctionForm({ studentId, locale, embedded }: Props) {
   const t = useTranslations("sanctions");
   const tTypes = useTranslations("sanctions.types");
   const tCommon = useTranslations("common");
@@ -22,11 +24,15 @@ export function AddSanctionForm({ studentId, locale }: Props) {
   return (
     <form
       action={addSanctionAction}
-      className="space-y-4 rounded-xl border border-border bg-card p-6"
+      className={
+        embedded ? "space-y-4" : "space-y-4 rounded-xl border border-border bg-card p-6"
+      }
     >
       <input type="hidden" name="studentId" value={studentId} />
       <input type="hidden" name="locale" value={locale} />
-      <h3 className="text-sm font-semibold">{t("composeTitle")}</h3>
+      {!embedded ? (
+        <h3 className="text-sm font-semibold">{t("composeTitle")}</h3>
+      ) : null}
 
       <div className="space-y-2">
         <Label htmlFor="stype">{t("formType")}</Label>

@@ -12,6 +12,7 @@ import { getSessionUser } from "@/lib/session-server";
 import { stripClassFromOtherProfiles } from "@/app/actions/staff-admin";
 import { isDirector } from "@/lib/roles";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
 const DOCUMENTS_BUCKET_DEFAULT = "documents";
 const STORAGE_REMOVE_CHUNK = 100;
@@ -84,7 +85,7 @@ async function requireDirector() {
   if (!user || !isDirector(user)) {
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
-  return { ok: true as const };
+  return { ok: true as const, user };
 }
 
 /** Met à jour prof principal pour une seule classe sans retirer les autres classes du titulaire. */
@@ -254,6 +255,18 @@ export async function createClassAction(
 
   await ensureClassStudentInboxFolder(admin, data.id as string);
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "CLASS_CREATED",
+    entityType: "class",
+    entityId: data.id as string,
+    entityLabel: name,
+    meta: {
+      academic_year_start: yrs.start,
+      academic_year_end: yrs.end,
+    },
+  });
+
   revalidatePath(`/${locale}/administration/classes`);
   revalidatePath(`/${locale}/administration/classes/${data.id}`);
   revalidatePath(`/${locale}/cloud`);
@@ -323,6 +336,19 @@ export async function updateClassAction(
     if (!pr.ok) return { ok: false as const, error: pr.error };
   }
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "CLASS_UPDATED",
+    entityType: "class",
+    entityId: classId,
+    entityLabel: name,
+    meta: {
+      principal_id: input.principalId,
+      academic_year_start: yrs.start,
+      academic_year_end: yrs.end,
+    },
+  });
+
   revalidatePath(`/${locale}/administration/classes`);
   revalidatePath(`/${locale}/administration/classes/${classId}`);
   revalidatePath(`/${locale}/cloud`);
@@ -338,7 +364,7 @@ export async function deleteClassAction(locale: AppLocale, classId: string) {
 
   const { data: cls } = await admin
     .from("classes")
-    .select("principal_id")
+    .select("principal_id,name")
     .eq("id", classId)
     .maybeSingle();
   const pid = cls?.principal_id as string | null;
@@ -346,12 +372,22 @@ export async function deleteClassAction(locale: AppLocale, classId: string) {
     const r = await applyClassPrincipalChange(admin, classId, null);
     if (!r.ok) return { ok: false as const, error: r.error };
   }
+  const classLabel =
+    (cls as { name?: string | null } | null)?.name ?? null;
 
   const rmFiles = await deleteClassCloudFilesAndStorage(admin, classId);
   if (!rmFiles.ok) return { ok: false as const, error: rmFiles.error };
 
   const { error: dErr } = await admin.from("classes").delete().eq("id", classId);
   if (dErr) return { ok: false as const, error: dErr.message };
+
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "CLASS_DELETED",
+    entityType: "class",
+    entityId: classId,
+    entityLabel: classLabel,
+  });
 
   revalidatePath(`/${locale}/administration/classes`);
   revalidatePath(`/${locale}/cloud`);

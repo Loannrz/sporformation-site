@@ -33,6 +33,7 @@ const NAV_KEYS = new Set<BreadcrumbLabelKey>([
   "classes",
   "calendar",
   "admin",
+  "adminSanctions",
   "adminAnnouncements",
   "adminCalendar",
   "settings",
@@ -79,14 +80,14 @@ export function DashboardPageFrame({ children, className }: Props) {
   return (
     <div className={cn("w-full", className)}>
       {(showBack || crumbs.length > 0) && (
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="mb-8 rounded-2xl border border-border/70 bg-background/75 p-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/65 sm:p-4">
+          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center">
             {showBack ? (
               <Button
                 type="button"
                 variant="outline"
                 size="icon"
-                className="shrink-0 rounded-full"
+                className="shrink-0 rounded-full border-border/80 bg-background/90 shadow-sm"
                 aria-label={tCommon("back")}
                 onClick={() => router.back()}
               >
@@ -113,7 +114,7 @@ export function DashboardPageFrame({ children, className }: Props) {
                           <BreadcrumbLink asChild>
                             <Link
                               href={c.href}
-                              className="truncate hover:text-foreground"
+                              className="truncate text-muted-foreground transition-colors hover:text-foreground"
                             >
                               {resolveLabel(c.labelKey)}
                             </Link>
@@ -132,7 +133,7 @@ export function DashboardPageFrame({ children, className }: Props) {
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22, ease: "easeOut" }}
+        transition={{ duration: 0.24, ease: "easeOut" }}
       >
         {children}
       </motion.div>

@@ -9,6 +9,7 @@ import { getSessionUser } from "@/lib/session-server";
 import { canManageTeacherAccounts, isDirector, profileRoleToUserRole } from "@/lib/roles";
 import type { SessionUser, TeacherEmploymentStatus, UserRole } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -135,7 +136,21 @@ export type PendingTeacherInviteRow = {
   bio: string | null;
   subjects: string[] | null;
   principal_class_ids: string[] | null;
+  assigned_class_ids: string[] | null;
 };
+
+function isMissingPendingSignupAssignedColumnError(err: {
+  code?: string | null;
+  message?: string | null;
+} | null | undefined): boolean {
+  if (!err) return false;
+  if (err.code === "42703") return true;
+  const m = (err.message ?? "").toLowerCase();
+  return (
+    m.includes("assigned_class_ids") &&
+    (m.includes("does not exist") || m.includes("column"))
+  );
+}
 
 /** Après `auth.admin.createUser`, crée le profil à partir de l’invitation et supprime la ligne pending. */
 export async function finalizeTeacherAccountFromPendingInvite(
@@ -150,6 +165,9 @@ export async function finalizeTeacherAccountFromPendingInvite(
   const normalizedPrincipal = normalizePrincipalClassIds(
     inv.principal_class_ids ?? [],
   );
+  const normalizedAssigned = normalizePrincipalClassIds(
+    inv.assigned_class_ids ?? [],
+  );
   const ins = await insertTeacherProfileRow(admin, {
     id: params.userId,
     email: params.email,
@@ -162,6 +180,7 @@ export async function finalizeTeacherAccountFromPendingInvite(
     bio: inv.bio ?? undefined,
     subjectsCsv: (inv.subjects ?? []).join(","),
     principalClassIds: normalizedPrincipal,
+    assignedClassIds: normalizedAssigned,
     passwordInitiallySet: true,
   });
   if (!ins.ok) return ins;
@@ -340,7 +359,7 @@ async function insertTeacherProfileRow(
   const principalClassIdsForRow =
     input.role === "PROF_PRINCIPAL" ? input.principalClassIds : [];
   const assignedClassIdsForRow =
-    input.role === "PROFESSEUR"
+    input.role === "PROFESSEUR" || input.role === "PROF_PRINCIPAL"
       ? normalizePrincipalClassIds(input.assignedClassIds ?? [])
       : [];
 
@@ -398,8 +417,10 @@ export async function createTeacherAction(
     leftEstablishmentOn?: string | null;
     bio?: string;
     subjectsCsv?: string;
-    /** Obligatoire si role === PROF_PRINCIPAL — UUID des classes. */
+    /** Obligatoire si role === PROF_PRINCIPAL — UUID des classes dont il est titulaire. */
     principalClassIds?: string[];
+    /** Classes où il enseigne (PROFESSEUR, ou en complément du titre PP). */
+    assignedClassIds?: string[];
     /** Optionnel — si renseigné (≥ 8 caractères), l’enseignant peut se connecter sans étape « premier mot de passe ». */
     password?: string | null;
   },
@@ -452,6 +473,15 @@ export async function createTeacherAction(
     return { ok: false as const, error: principalGate.error };
   }
 
+  const normalizedAssigned = normalizePrincipalClassIds(input.assignedClassIds);
+  const assignedGate = await ensureAssignedClassesExist(
+    admin,
+    normalizedAssigned,
+  );
+  if (!assignedGate.ok) {
+    return { ok: false as const, error: assignedGate.error };
+  }
+
   const email = emailRaw;
 
   const isFormer = input.employmentStatus === "FORMER_INACTIVE";
@@ -482,27 +512,57 @@ export async function createTeacherAction(
       return { ok: false as const, error: "EMAIL_AUTH_EXISTS" as const };
     }
 
-    const invitePayload = {
-      email,
-      first_name: fn,
-      last_name: ln,
-      base_role: input.role,
-      teacher_employment_status: input.employmentStatus,
-      joined_at: input.joinedAt?.trim() || null,
-      left_establishment_on: null,
-      bio: input.bio?.trim() || null,
-      subjects: subjectsArr.length ? subjectsArr : [],
-      principal_class_ids: normalizedPrincipal,
-      created_by: gate.user.id,
+    const buildInvitePayload = (includeAssigned: boolean) => {
+      const base: Record<string, unknown> = {
+        email,
+        first_name: fn,
+        last_name: ln,
+        base_role: input.role,
+        teacher_employment_status: input.employmentStatus,
+        joined_at: input.joinedAt?.trim() || null,
+        left_establishment_on: null,
+        bio: input.bio?.trim() || null,
+        subjects: subjectsArr.length ? subjectsArr : [],
+        principal_class_ids: normalizedPrincipal,
+        created_by: gate.user.id,
+      };
+      if (includeAssigned) {
+        base.assigned_class_ids = normalizedAssigned;
+      }
+      return base;
     };
 
-    const { error: invErr } = await admin
-      .from("teacher_pending_signups")
-      .upsert(invitePayload, { onConflict: "email" });
+    let invErr: { code?: string | null; message?: string | null } | null = null;
+    {
+      const res = await admin
+        .from("teacher_pending_signups")
+        .upsert(buildInvitePayload(true), { onConflict: "email" });
+      invErr = res.error;
+    }
+    if (invErr && isMissingPendingSignupAssignedColumnError(invErr)) {
+      const fallback = await admin
+        .from("teacher_pending_signups")
+        .upsert(buildInvitePayload(false), { onConflict: "email" });
+      invErr = fallback.error;
+    }
 
     if (invErr) {
-      return { ok: false as const, error: invErr.message };
+      return { ok: false as const, error: invErr.message ?? "GENERIC" };
     }
+
+    await logActivity({
+      ...actorFromSession(gate.user),
+      action: "STAFF_CREATED",
+      entityType: "teacher_pending_signup",
+      entityId: email,
+      entityLabel: `${fn} ${ln}`.trim() || email,
+      meta: {
+        email,
+        target_role: input.role,
+        employment_status: input.employmentStatus,
+        pending_signup: true,
+      },
+    });
 
     revalidatePath(`/${locale}/administration/comptes`);
     revalidatePath(`/${locale}/cloud`);
@@ -552,6 +612,7 @@ export async function createTeacherAction(
       bio: input.bio,
       subjectsCsv: input.subjectsCsv,
       principalClassIds: normalizedPrincipal,
+      assignedClassIds: normalizedAssigned,
       passwordInitiallySet: pw.initiallySet,
     });
 
@@ -587,6 +648,20 @@ export async function createTeacherAction(
       await admin.auth.admin.updateUserById(id, { ban_duration: "800000h" });
     }
 
+    await logActivity({
+      ...actorFromSession(gate.user),
+      action: "STAFF_CREATED",
+      entityType: "profile",
+      entityId: id,
+      entityLabel: `${fn} ${ln}`.trim() || email,
+      meta: {
+        email,
+        target_role: input.role,
+        employment_status: input.employmentStatus,
+        linked_existing_auth: true,
+      },
+    });
+
     revalidatePath(`/${locale}/administration/comptes`);
     revalidatePath(`/${locale}/cloud`);
     return { ok: true as const, id, linkedExistingAuth: true as const };
@@ -609,6 +684,7 @@ export async function createTeacherAction(
     bio: input.bio,
     subjectsCsv: input.subjectsCsv,
     principalClassIds: normalizedPrincipal,
+    assignedClassIds: normalizedAssigned,
     passwordInitiallySet: pw.initiallySet,
   });
 
@@ -632,6 +708,19 @@ export async function createTeacherAction(
   if (isFormer) {
     await admin.auth.admin.updateUserById(id, { ban_duration: "800000h" });
   }
+
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "STAFF_CREATED",
+    entityType: "profile",
+    entityId: id,
+    entityLabel: `${fn} ${ln}`.trim() || email,
+    meta: {
+      email,
+      target_role: input.role,
+      employment_status: input.employmentStatus,
+    },
+  });
 
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/cloud`);
@@ -662,10 +751,11 @@ export async function updateTeacherProfileAction(
 
   const { data: target } = await admin
     .from("profiles")
-    .select("base_role")
+    .select("base_role,email")
     .eq("id", teacherId)
     .maybeSingle();
   const targetRole = target?.base_role as UserRole | undefined;
+  const currentEmail = String((target as { email?: string | null } | null)?.email ?? "").trim();
 
   if (gate.user.role === "ADMINISTRATEUR") {
     if (targetRole === "DIRECTEUR" || targetRole === "ADMINISTRATEUR") {
@@ -690,7 +780,10 @@ export async function updateTeacherProfileAction(
     return { ok: false as const, error: "DEMOTE_SELF" as const };
   }
 
-  const email = input.email.trim();
+  let email = input.email.trim();
+  if (gate.user.role !== "DIRECTEUR") {
+    email = currentEmail;
+  }
   const subjects = input.subjectsCsv
     .split(/[,;]/)
     .map((s) => s.trim())
@@ -716,7 +809,9 @@ export async function updateTeacherProfileAction(
     input.role === "PROF_PRINCIPAL" ? normalizedPrincipal : [];
 
   const assignedForProfile =
-    input.role === "PROFESSEUR" ? normalizedAssigned : [];
+    input.role === "PROFESSEUR" || input.role === "PROF_PRINCIPAL"
+      ? normalizedAssigned
+      : [];
 
   const { error: pErr } = await admin
     .from("profiles")
@@ -747,6 +842,18 @@ export async function updateTeacherProfileAction(
     ...(email.length ? { email } : {}),
   });
   if (aErr) return { ok: false as const, error: aErr.message };
+
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "STAFF_UPDATED",
+    entityType: "profile",
+    entityId: teacherId,
+    entityLabel: `${input.firstName} ${input.lastName}`.trim() || email,
+    meta: {
+      email,
+      target_role: input.role,
+    },
+  });
 
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);
@@ -783,6 +890,13 @@ export async function resetTeacherPasswordAction(
   });
   if (error) return { ok: false as const, error: error.message };
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "STAFF_PASSWORD_RESET_BY_ADMIN",
+    entityType: "profile",
+    entityId: teacherId,
+  });
+
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);
   return { ok: true as const };
 }
@@ -818,6 +932,14 @@ export async function markTeacherLeftEstablishmentAction(
   });
   if (bErr) return { ok: false as const, error: bErr.message };
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "STAFF_MARKED_LEFT",
+    entityType: "profile",
+    entityId: teacherId,
+    meta: { left_on: leftOn },
+  });
+
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);
   revalidatePath(`/${locale}/profil/${teacherId}`);
@@ -850,6 +972,13 @@ export async function reactivateTeacherEstablishmentAction(
     ban_duration: "none",
   });
   if (bErr) return { ok: false as const, error: bErr.message };
+
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "STAFF_REACTIVATED",
+    entityType: "profile",
+    entityId: teacherId,
+  });
 
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);
@@ -921,6 +1050,14 @@ export async function deletePendingTeacherInviteAction(
     };
   }
 
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "STAFF_PENDING_INVITE_DELETED",
+    entityType: "teacher_pending_signup",
+    entityId: normalized,
+    entityLabel: normalized,
+  });
+
   revalidatePath(`/${locale}/administration/comptes`);
   return { ok: true };
 }
@@ -941,17 +1078,32 @@ export async function deleteTeacherAndDocumentsAction(
 
   const { data: victim } = await admin
     .from("profiles")
-    .select("base_role")
+    .select("base_role,first_name,last_name,email")
     .eq("id", teacherId)
     .maybeSingle();
   if (victim?.base_role === "DIRECTEUR") {
     return { ok: false as const, error: "NO_DELETE_DIRECTOR" as const };
   }
 
+  const victimLabel =
+    `${(victim as { first_name?: string | null })?.first_name ?? ""} ${
+      (victim as { last_name?: string | null })?.last_name ?? ""
+    }`.trim() ||
+    ((victim as { email?: string | null })?.email ?? null);
+
   await purgeTeacherFiles(admin, teacherId);
 
   const { error: dErr } = await admin.auth.admin.deleteUser(teacherId);
   if (dErr) return { ok: false as const, error: dErr.message };
+
+  await logActivity({
+    ...actorFromSession(gate.user),
+    action: "STAFF_DELETED",
+    entityType: "profile",
+    entityId: teacherId,
+    entityLabel: victimLabel,
+    meta: { target_role: victim?.base_role ?? null },
+  });
 
   revalidatePath(`/${locale}/administration/comptes`);
   revalidatePath(`/${locale}/administration/comptes/${teacherId}`);

@@ -28,6 +28,8 @@ import {
   getStudentInboxFolderId as getStudentInboxFolderIdPure,
 } from "@/lib/cloud/class-cloud-folder-helpers";
 import { formatCloudClassDisplayName as formatCloudClassDisplayNamePure } from "@/lib/format-cloud-class-display-name";
+import { SANCTION_TABLE_ROW_SELECT } from "@/lib/sanction-columns";
+import { resolveSanctionsViewerScope } from "@/lib/sanctions-viewer-scope";
 
 type ClassRowDb = {
   id: string;
@@ -89,8 +91,14 @@ async function loadClassRowById(
   return null;
 }
 
+import {
+  STUDENT_FULL_SELECT,
+  STUDENT_BASE_SELECT,
+} from "@/lib/students-extended-fields";
+
 const STUDENT_SELECT_TRIES = [
-  "id,first_name,last_name,email,photo_url,class_id,entry_date,birth_date,sex,birth_place",
+  STUDENT_FULL_SELECT,
+  STUDENT_BASE_SELECT,
   "id,first_name,last_name,email,photo_url,class_id,entry_date",
 ] as const;
 
@@ -584,6 +592,27 @@ export function mapStudentRow(row: {
   birth_date?: string | null;
   sex?: string | null;
   birth_place?: string | null;
+  njs?: string | null;
+  promo?: string | null;
+  of_name?: string | null;
+  formation_number?: string | null;
+  diploma?: string | null;
+  tep?: string | null;
+  birth_country?: string | null;
+  birth_department?: string | null;
+  phone?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  postal_code?: string | null;
+  address_city?: string | null;
+  address_country?: string | null;
+  employment_status?: string | null;
+  parcoursup?: string | null;
+  validation_status?: string | null;
+  uc1_status?: string | null;
+  uc2_status?: string | null;
+  uc3_status?: string | null;
+  uc4_status?: string | null;
 }): StudentProfile {
   return {
     id: row.id,
@@ -596,6 +625,27 @@ export function mapStudentRow(row: {
     birthDate: row.birth_date ?? null,
     sex: row.sex ?? null,
     birthPlace: row.birth_place ?? null,
+    njs: row.njs ?? null,
+    promo: row.promo ?? null,
+    ofName: row.of_name ?? null,
+    formationNumber: row.formation_number ?? null,
+    diploma: row.diploma ?? null,
+    tep: row.tep ?? null,
+    birthCountry: row.birth_country ?? null,
+    birthDepartment: row.birth_department ?? null,
+    phone: row.phone ?? null,
+    addressLine1: row.address_line1 ?? null,
+    addressLine2: row.address_line2 ?? null,
+    postalCode: row.postal_code ?? null,
+    addressCity: row.address_city ?? null,
+    addressCountry: row.address_country ?? null,
+    employmentStatus: row.employment_status ?? null,
+    parcoursup: row.parcoursup ?? null,
+    validationStatus: row.validation_status ?? null,
+    uc1Status: row.uc1_status ?? null,
+    uc2Status: row.uc2_status ?? null,
+    uc3Status: row.uc3_status ?? null,
+    uc4Status: row.uc4_status ?? null,
   };
 }
 
@@ -681,6 +731,7 @@ function mapSanctionDbToApp(
     type: string;
     occurred_at: string;
     description: string;
+    title?: string | null;
     author_id: string | null;
     status: string;
     retired_at: string | null;
@@ -696,6 +747,10 @@ function mapSanctionDbToApp(
     type: row.type as SanctionType,
     date: row.occurred_at,
     description: row.description,
+    title:
+      row.title && String(row.title).trim()
+        ? String(row.title).trim()
+        : null,
     authorId: row.author_id ?? "",
     authorName: profileName(profileMap, row.author_id),
     status: row.status === "retired" ? "retired" : "active",
@@ -716,7 +771,7 @@ export async function fetchSanctionById(id: string): Promise<Sanction | null> {
   const { data: row, error } = await supabase
     .from("sanctions")
     .select(
-      "id,student_id,type,occurred_at,description,author_id,status,retired_at,retired_by,pdf_path",
+      SANCTION_TABLE_ROW_SELECT,
     )
     .eq("id", id)
     .maybeSingle();
@@ -745,7 +800,7 @@ export async function fetchSanctionsForStudent(
   const { data: rows, error } = await supabase
     .from("sanctions")
     .select(
-      "id,student_id,type,occurred_at,description,author_id,status,retired_at,retired_by,pdf_path",
+      SANCTION_TABLE_ROW_SELECT,
     )
     .eq("student_id", studentId)
     .order("occurred_at", { ascending: false });
@@ -761,17 +816,37 @@ export async function fetchSanctionsForStudent(
   );
 }
 
-export async function fetchRecentSanctionsRows(limit: number) {
+export async function fetchRecentSanctionsForUser(
+  user: SessionUser,
+  limit: number,
+): Promise<Sanction[]> {
   const supabase = await staffReadSupabase();
   if (!supabase) return [];
-  const { data: rows, error } = await supabase
+
+  if (user.role === "ELEVE" && user.studentId) {
+    const all = await fetchSanctionsForStudent(user.studentId);
+    return all.filter((s) => s.status === "active").slice(0, limit);
+  }
+
+  const scope = await resolveSanctionsViewerScope(supabase, user);
+  if (scope.kind === "none") return [];
+
+  let query = supabase
     .from("sanctions")
-    .select(
-      "id,student_id,type,occurred_at,description,author_id,status,retired_at,retired_by,pdf_path",
-    )
+    .select(SANCTION_TABLE_ROW_SELECT)
+    .eq("status", "active")
     .order("occurred_at", { ascending: false })
     .limit(limit);
-  if (error || !rows) return [];
+
+  if (scope.kind === "authorOnly") {
+    query = query.eq("author_id", scope.authorId);
+  } else if (scope.kind === "studentIds") {
+    query = query.in("student_id", scope.studentIds);
+  }
+
+  const { data: rows, error } = await query;
+  if (error || !rows?.length) return [];
+
   const ids = rows.map((r) => r.id);
   const profileMap = await loadProfileMap(
     rows.flatMap((r) => [r.author_id, r.retired_by]),
@@ -781,33 +856,6 @@ export async function fetchRecentSanctionsRows(limit: number) {
   return rows.map((r) =>
     mapSanctionDbToApp(r, profileMap, attMap.get(r.id) ?? []),
   );
-}
-
-export async function fetchRecentSanctionsForUser(
-  user: SessionUser,
-  limit: number,
-): Promise<Sanction[]> {
-  const rows = await fetchRecentSanctionsRows(Math.max(limit * 4, 32));
-  if (user.role !== "PROF_PRINCIPAL") {
-    return rows.slice(0, limit);
-  }
-  const scope = new Set(user.principalClassIds ?? []);
-  if (scope.size === 0) return [];
-  const supabase = await staffReadSupabase();
-  if (!supabase) return [];
-  const studentIds = [...new Set(rows.map((r) => r.studentId))];
-  if (studentIds.length === 0) return [];
-  const { data: students, error } = await supabase
-    .from("students")
-    .select("id,class_id")
-    .in("id", studentIds);
-  if (error || !students) return [];
-  const classByStudent = new Map(students.map((s) => [s.id, s.class_id]));
-  const filtered = rows.filter((r) => {
-    const cid = classByStudent.get(r.studentId);
-    return cid && scope.has(cid);
-  });
-  return filtered.slice(0, limit);
 }
 
 /** Prénom / nom pour affichage dashboard (lecture staff). */
@@ -846,7 +894,7 @@ export async function fetchSanctionsForClassStudents(
   const { data: rows, error } = await supabase
     .from("sanctions")
     .select(
-      "id,student_id,type,occurred_at,description,author_id,status,retired_at,retired_by,pdf_path",
+      SANCTION_TABLE_ROW_SELECT,
     )
     .in("student_id", studentIds)
     .order("occurred_at", { ascending: false })
@@ -1351,6 +1399,45 @@ export function getStudentInboxFolderId(
   rows: ClassCloudFolderRow[],
 ): string | null {
   return getStudentInboxFolderIdPure(rows);
+}
+
+/** Périmètre dossiers cloud pour un élève : tout l’arbre « Documents des élèves ». */
+export type StudentCloudDepositScope = {
+  inboxId: string | null;
+  landingFolderId: string | null;
+};
+
+export function resolveStudentClassCloudDepositScope(
+  rows: ClassCloudFolderRow[],
+): StudentCloudDepositScope {
+  const inboxId = getStudentInboxFolderId(rows);
+  return { inboxId, landingFolderId: inboxId };
+}
+
+export function studentMayAccessClassCloudDepositFolder(
+  rows: ClassCloudFolderRow[],
+  folderId: string | null,
+): boolean {
+  if (!folderId) return false;
+  return isClassFolderInStudentUploadTree(rows, folderId);
+}
+
+/** IDs des dossiers sous « Documents des élèves » (inbox + tous les descendants). */
+export function collectStudentDepositAccessibleFolderIds(
+  rows: ClassCloudFolderRow[],
+  scope: StudentCloudDepositScope,
+): string[] {
+  const root = scope.inboxId ?? scope.landingFolderId;
+  if (!root) return [];
+  const out: string[] = [];
+  const walk = (id: string) => {
+    out.push(id);
+    for (const r of rows) {
+      if (r.parentId === id) walk(r.id);
+    }
+  };
+  walk(root);
+  return out;
 }
 
 export async function ensureClassStudentInboxFolder(

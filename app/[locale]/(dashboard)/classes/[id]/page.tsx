@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { getSessionUser } from "@/lib/session-server";
+import { viewerMayAccessClassPage } from "@/lib/staff-classes-view";
 import {
   Card,
   CardContent,
@@ -17,6 +19,7 @@ import {
   fetchStudentsForClass,
   formatCloudClassDisplayName,
 } from "@/lib/data/school";
+import { studentInitials } from "@/lib/student-directory-accents";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import { getTranslations } from "next-intl/server";
@@ -29,7 +32,6 @@ import {
   Cloud,
   Layers,
   UserCircle2,
-  UserRound,
 } from "lucide-react";
 
 export default async function ClassDetailPage({
@@ -37,6 +39,14 @@ export default async function ClassDetailPage({
 }: {
   params: { locale: AppLocale; id: string };
 }) {
+  const user = await getSessionUser();
+  if (!user || user.role === "ELEVE") {
+    notFound();
+  }
+  if (!viewerMayAccessClassPage(user, params.id)) {
+    notFound();
+  }
+
   const cls = await fetchClassById(params.id);
   if (!cls) {
     notFound();
@@ -163,49 +173,51 @@ export default async function ClassDetailPage({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
+        <Card className="overflow-hidden border-border shadow-sm lg:col-span-2">
+          <CardHeader className="border-b border-border/60 bg-gradient-to-r from-primary/[0.07] via-card to-accent/[0.07] dark:from-primary/[0.12] dark:via-card dark:to-accent/[0.1]">
             <CardTitle className="text-lg">{t("students")}</CardTitle>
             <CardDescription>{t("studentsListHint")}</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
+          <CardContent className="grid gap-3 pt-6 sm:grid-cols-2">
             {students.length === 0 ? (
               <div className="sm:col-span-2 rounded-lg border border-dashed border-border bg-muted/25 px-4 py-10 text-center text-sm text-muted-foreground">
                 {t("noStudents")}
               </div>
             ) : (
-              students.map((s) => (
-                <Link
-                  href={`/etudiants/${s.id}`}
-                  key={s.id}
-                  className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/25 hover:bg-muted/35"
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
-                      aria-hidden
-                    >
-                      <UserRound className="size-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold leading-tight transition-colors group-hover:text-primary">
-                        {s.firstName} {s.lastName}
-                      </p>
-                      {s.email ? (
-                        <p className="mt-1 truncate text-xs text-muted-foreground">
-                          {s.email}
+              students.map((s) => {
+                return (
+                  <Link
+                    href={`/etudiants/${s.id}`}
+                    key={s.id}
+                    className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted text-[11px] font-bold uppercase text-foreground shadow-inner"
+                        aria-hidden
+                      >
+                        {studentInitials(s.firstName, s.lastName)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold leading-tight transition-colors group-hover:text-primary">
+                          {s.firstName} {s.lastName}
                         </p>
-                      ) : (
-                        <p className="mt-1 text-xs text-muted-foreground">—</p>
-                      )}
-                      <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
-                        {t("openStudentProfile")}
-                        <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-                      </span>
+                        {s.email ? (
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {s.email}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-xs text-muted-foreground">—</p>
+                        )}
+                        <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                          {t("openStudentProfile")}
+                          <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))
+                  </Link>
+                );
+              })
             )}
           </CardContent>
         </Card>
