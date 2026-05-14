@@ -134,6 +134,12 @@ export async function uploadCloudDocumentAction(
     }
   }
 
+  if (user.role !== "ELEVE") {
+    if (!classId) {
+      return { ok: false, error: "MISSING_FIELDS" };
+    }
+  }
+
   let classFolderId: string | null = null;
   const classFolderRaw = String(formData.get("classFolderId") ?? "").trim();
   if (classFolderRaw && classFolderRaw !== "__root__") {
@@ -367,6 +373,10 @@ export async function updateCloudDocumentMetadataAction(
 
   const classIdMerged =
     classId ?? ((existing.class_id as string | null | undefined) ?? null);
+
+  if (user.role !== "ELEVE" && !classIdMerged) {
+    return { ok: false, error: "MISSING_FIELDS" };
+  }
 
   if (nextClassFolderId !== undefined && nextClassFolderId) {
     if (!classIdMerged) {

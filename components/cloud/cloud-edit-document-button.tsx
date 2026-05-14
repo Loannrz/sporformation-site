@@ -81,14 +81,14 @@ export function CloudEditDocumentButton({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [selectedClassId, setSelectedClassId] = useState<string | null>(
-    file.classId,
+    file.classId ?? classOptions[0]?.id ?? null,
   );
 
   useEffect(() => {
     if (open) {
-      setSelectedClassId(file.classId);
+      setSelectedClassId(file.classId ?? classOptions[0]?.id ?? null);
     }
-  }, [open, file.classId]);
+  }, [open, file.classId, classOptions]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -173,25 +173,32 @@ export function CloudEditDocumentButton({
             <Label htmlFor={`cloud-edit-class-${file.id}`}>
               {t("uploadFieldClass")}
             </Label>
-            <select
-              id={`cloud-edit-class-${file.id}`}
-              name="classId"
-              required
-              disabled={pending}
-              value={selectedClassId ?? "__none__"}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSelectedClassId(v === "__none__" ? null : v);
-              }}
-              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="__none__">{t("uploadNoClass")}</option>
-              {classOptions.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            {classOptions.length === 0 ? (
+              <p className="text-sm text-destructive">{t("uploadNoClassAvailable")}</p>
+            ) : (
+              <>
+                <select
+                  id={`cloud-edit-class-${file.id}`}
+                  name="classId"
+                  required
+                  disabled={pending}
+                  value={selectedClassId ?? classOptions[0]!.id}
+                  onChange={(e) => {
+                    setSelectedClassId(e.target.value);
+                  }}
+                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {classOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {t("uploadClassRequiredStaff")}
+                </p>
+              </>
+            )}
           </div>
 
           <CloudClassFolderPlacementPicker
@@ -244,7 +251,7 @@ export function CloudEditDocumentButton({
             >
               {t("uploadCancel")}
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || classOptions.length === 0}>
               {pending ? t("editSubmitting") : t("editSubmit")}
             </Button>
           </DialogFooter>

@@ -1,9 +1,13 @@
 "use client";
 
+import { PendingTeacherInviteCard } from "@/components/admin/pending-teacher-invite-card";
 import { StaffAccountCard } from "@/components/admin/staff-account-card";
 import { Input } from "@/components/ui/input";
 import type { AdminClassOption } from "@/lib/data/school";
-import type { StaffAdminRow } from "@/lib/data/staff-admin";
+import type {
+  PendingTeacherInviteRow,
+  StaffAdminRow,
+} from "@/lib/data/staff-admin";
 import type { AppLocale } from "@/i18n/routing";
 import type { UserRole } from "@/types";
 import { Search } from "lucide-react";
@@ -26,6 +30,26 @@ function roleLabel(
     default:
       return role;
   }
+}
+
+function inviteMatchesSearch(
+  invite: PendingTeacherInviteRow,
+  query: string,
+  translatedRole: string,
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const blob = [
+    invite.firstName,
+    invite.lastName,
+    `${invite.firstName} ${invite.lastName}`,
+    invite.email,
+    invite.role,
+    translatedRole,
+  ]
+    .join(" ")
+    .toLowerCase();
+  return blob.includes(q);
 }
 
 function staffMatchesSearch(
@@ -52,6 +76,7 @@ function staffMatchesSearch(
 
 type Props = {
   staff: StaffAdminRow[];
+  pendingInvites?: PendingTeacherInviteRow[];
   locale: AppLocale;
   viewerId: string;
   viewerRole: UserRole;
@@ -60,6 +85,7 @@ type Props = {
 
 export function StaffAccountsSearchGrid({
   staff,
+  pendingInvites = [],
   locale,
   viewerId,
   viewerRole,
@@ -68,7 +94,15 @@ export function StaffAccountsSearchGrid({
   const t = useTranslations("admin.accounts");
   const [query, setQuery] = useState("");
 
-  const filtered = useMemo(
+  const filteredPending = useMemo(
+    () =>
+      pendingInvites.filter((inv) =>
+        inviteMatchesSearch(inv, query, roleLabel(t, inv.role)),
+      ),
+    [pendingInvites, query, t],
+  );
+
+  const filteredStaff = useMemo(
     () =>
       staff.filter((s) =>
         staffMatchesSearch(s, query, roleLabel(t, s.role)),
@@ -76,7 +110,9 @@ export function StaffAccountsSearchGrid({
     [staff, query, t],
   );
 
-  const showNoResults = staff.length > 0 && filtered.length === 0;
+  const totalRows = pendingInvites.length + staff.length;
+  const showNoResults =
+    totalRows > 0 && filteredPending.length === 0 && filteredStaff.length === 0;
 
   return (
     <div className="space-y-5">
@@ -108,7 +144,15 @@ export function StaffAccountsSearchGrid({
       ) : null}
 
       <div className="grid gap-5 md:grid-cols-2">
-        {filtered.map((s) => (
+        {filteredPending.map((inv) => (
+          <PendingTeacherInviteCard
+            key={`pending:${inv.email}`}
+            invite={inv}
+            locale={locale}
+            classOptions={classOptions}
+          />
+        ))}
+        {filteredStaff.map((s) => (
           <StaffAccountCard
             key={s.id}
             staff={s}

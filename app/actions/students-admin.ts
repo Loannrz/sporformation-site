@@ -100,7 +100,8 @@ export async function createStudentAction(
     return { ok: false as const, error: "NAME_REQUIRED" as const };
   }
 
-  const email = input.email?.trim() || null;
+  const emailRaw = input.email?.trim();
+  const email = emailRaw ? emailRaw.toLowerCase() : null;
   const birthPlace = input.birthPlace?.trim() || null;
   const sex = normalizeSex(input.sex);
   const birthDate = input.birthDate?.trim() || null;
@@ -162,7 +163,9 @@ export async function updateStudentAction(
   const patch: Record<string, unknown> = {
     first_name: firstName,
     last_name: lastName,
-    email: input.email?.trim() || null,
+    email: input.email?.trim()
+      ? input.email!.trim().toLowerCase()
+      : null,
     class_id: input.classId?.trim() || null,
     entry_date: input.entryDate?.trim() || null,
     birth_date: input.birthDate?.trim() || null,

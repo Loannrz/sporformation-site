@@ -21,6 +21,7 @@ export function CloudClassFolderPlacementPicker({
   selectId,
   disabled,
   name = "classFolderId",
+  studentDeposit = false,
 }: {
   locale: AppLocale;
   dialogOpen: boolean;
@@ -31,6 +32,8 @@ export function CloudClassFolderPlacementPicker({
   selectId: string;
   disabled?: boolean;
   name?: string;
+  /** Libellés adaptés au formulaire « dépôt élève ». */
+  studentDeposit?: boolean;
 }) {
   const t = useTranslations("cloud");
   const manualPickRef = useRef(false);
@@ -87,10 +90,10 @@ export function CloudClassFolderPlacementPicker({
           setFetched(null);
           return;
         }
+        const keepFetched =
+          studentDeposit ? res.options.length >= 1 : res.options.length > 1;
         setFetched(
-          res.options.length > 1
-            ? { classId: selectedClassId!, options: res.options }
-            : null,
+          keepFetched ? { classId: selectedClassId!, options: res.options } : null,
         );
       } finally {
         if (requestId === fetchGenRef.current) {
@@ -103,24 +106,27 @@ export function CloudClassFolderPlacementPicker({
     return () => {
       cancelled = true;
     };
-  }, [dialogOpen, locale, selectedClassId, seededFolderOptions?.classId]);
+  }, [dialogOpen, locale, selectedClassId, seededFolderOptions?.classId, studentDeposit]);
 
   const effectiveOptions = useMemo(() => {
     if (!selectedClassId) return null;
 
-    const fromSeed =
-      seededFolderOptions?.classId === selectedClassId &&
-      seededFolderOptions.options.length > 1
-        ? seededFolderOptions.options
-        : null;
-    if (fromSeed) return fromSeed;
+    if (seededFolderOptions?.classId === selectedClassId) {
+      const n = seededFolderOptions.options.length;
+      if (studentDeposit ? n >= 1 : n > 1) {
+        return seededFolderOptions.options;
+      }
+    }
 
-    if (fetched?.classId === selectedClassId && fetched.options.length > 1) {
-      return fetched.options;
+    if (fetched?.classId === selectedClassId) {
+      const n = fetched.options.length;
+      if (studentDeposit ? n >= 1 : n > 1) {
+        return fetched.options;
+      }
     }
 
     return null;
-  }, [selectedClassId, seededFolderOptions, fetched]);
+  }, [selectedClassId, seededFolderOptions, fetched, studentDeposit]);
 
   useEffect(() => {
     if (
@@ -157,7 +163,7 @@ export function CloudClassFolderPlacementPicker({
     return null;
   }
 
-  if (!effectiveOptions?.length || effectiveOptions.length <= 1) {
+  if (!effectiveOptions?.length) {
     const hasSeedForClass =
       seededFolderOptions?.classId === selectedClassId &&
       seededFolderOptions.options.length > 0;
@@ -182,6 +188,17 @@ export function CloudClassFolderPlacementPicker({
     return <input type="hidden" name={name} value="__root__" />;
   }
 
+  if (effectiveOptions.length === 1) {
+    const onlyId = effectiveOptions[0]!.id;
+    return (
+      <input
+        type="hidden"
+        name={name}
+        value={studentDeposit ? onlyId : "__root__"}
+      />
+    );
+  }
+
   return (
     <div className="flex gap-3 rounded-xl border border-border/70 bg-muted/30 px-3 py-3 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.05] sm:gap-4 sm:px-4 sm:py-4">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background shadow-inner ring-1 ring-border/80 dark:bg-muted/40">
@@ -190,10 +207,14 @@ export function CloudClassFolderPlacementPicker({
       <div className="min-w-0 flex-1 space-y-2">
         <div className="space-y-0.5">
           <Label htmlFor={selectId} className="text-sm font-semibold leading-tight">
-            {t("uploadFieldClassFolder")}
+            {studentDeposit
+              ? t("uploadFieldClassFolderStudent")
+              : t("uploadFieldClassFolder")}
           </Label>
           <p className="text-[11px] leading-snug text-muted-foreground sm:text-xs">
-            {t("uploadPlacementSubtitle")}
+            {studentDeposit
+              ? t("uploadPlacementSubtitleStudent")
+              : t("uploadPlacementSubtitle")}
           </p>
         </div>
         <select

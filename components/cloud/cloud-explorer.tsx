@@ -19,6 +19,8 @@ import type { AppLocale } from "@/i18n/routing";
 import type { CloudClassSelectOption } from "./cloud-upload-document-button";
 import { CloudExplorerAllDocuments } from "./cloud-explorer-all-documents";
 
+type ExplorerTab = "class" | "teacher" | "student" | "all";
+
 type Props = {
   locale: AppLocale;
   viewerId: string;
@@ -27,6 +29,8 @@ type Props = {
   hideExplorerSearch?: boolean;
   /** Onglet « par professeur » : réservé à la direction / administration. */
   showTeacherExplorerTab?: boolean;
+  /** Onglet initial (liens sidebar « Cloud » vs « Fichiers » avec `?tab=all`). */
+  initialExplorerTab?: ExplorerTab;
   classOptions: CloudClassSelectOption[];
   studentOptions: CloudStudentUploadOption[];
   classFolders: CloudExplorerClassFolder[];
@@ -48,6 +52,7 @@ export function CloudExplorer({
   viewerIsDirector,
   hideExplorerSearch = false,
   showTeacherExplorerTab = true,
+  initialExplorerTab,
   classOptions,
   studentOptions,
   classFolders,
@@ -56,7 +61,18 @@ export function CloudExplorer({
   allDocuments,
 }: Props) {
   const t = useTranslations("cloud");
-  const [tab, setTab] = useState("class");
+  const resolvedInitialTab = useMemo(() => {
+    let next = initialExplorerTab ?? "class";
+    if (next === "teacher" && !showTeacherExplorerTab) next = "class";
+    return next;
+  }, [initialExplorerTab, showTeacherExplorerTab]);
+
+  const [tab, setTab] = useState<ExplorerTab>(resolvedInitialTab);
+
+  useEffect(() => {
+    setTab(resolvedInitialTab);
+  }, [resolvedInitialTab]);
+
   const [query, setQuery] = useState("");
 
   const filteredClasses = useMemo(() => {
@@ -105,9 +121,10 @@ export function CloudExplorer({
   return (
     <div
       className={cn(
-        "w-full rounded-2xl border border-border/80 bg-gradient-to-b from-muted/35 via-muted/20 to-background/80",
-        "p-5 shadow-sm ring-1 ring-black/[0.04] dark:from-muted/25 dark:via-muted/15 dark:to-background/40 dark:ring-white/[0.06]",
-        "sm:p-7",
+        "w-full rounded-3xl border border-border/70 bg-gradient-to-b shadow-lg shadow-black/[0.03] ring-1 ring-black/[0.03]",
+        "from-muted/45 via-muted/20 to-background/90 backdrop-blur-[2px]",
+        "dark:from-muted/30 dark:via-muted/15 dark:to-background/60 dark:shadow-black/30 dark:ring-white/[0.07]",
+        "p-5 sm:p-8",
       )}
     >
       {!hideExplorerSearch ? (
@@ -131,17 +148,21 @@ export function CloudExplorer({
                   : t("explorerSearchPlaceholder")
               }
               autoComplete="off"
-              className="h-11 rounded-xl border-border/70 bg-background/90 pl-10 shadow-sm backdrop-blur-sm transition focus-visible:ring-foreground/20"
+              className="h-11 rounded-xl border-border/60 bg-background/95 pl-10 shadow-sm backdrop-blur-sm transition focus-visible:ring-2 focus-visible:ring-primary/25"
             />
           </div>
           <p className="text-xs text-muted-foreground">{t("explorerSearchHint")}</p>
         </div>
       ) : null}
 
-      <Tabs value={tab} onValueChange={setTab} className="w-full space-y-6">
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as ExplorerTab)}
+        className="w-full space-y-6"
+      >
         <TabsList
           className={cn(
-            "grid h-auto min-h-11 w-full gap-1 rounded-xl bg-muted/70 p-1.5 dark:bg-muted/50 sm:min-h-12",
+            "grid h-auto min-h-11 w-full gap-1 rounded-xl border border-border/50 bg-muted/50 p-1.5 backdrop-blur-sm dark:bg-muted/40 sm:min-h-12",
             showTeacherExplorerTab
               ? "grid-cols-2 sm:grid-cols-4"
               : "grid-cols-2 sm:grid-cols-3",
@@ -149,7 +170,7 @@ export function CloudExplorer({
         >
           <TabsTrigger
             value="class"
-            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
+            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:border data-[state=active]:border-border/60 data-[state=active]:bg-card data-[state=active]:shadow-md sm:gap-2 sm:text-sm"
           >
             <GraduationCap className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
             <span className="truncate">{t("tabsClass")}</span>
@@ -157,7 +178,7 @@ export function CloudExplorer({
           {showTeacherExplorerTab ? (
             <TabsTrigger
               value="teacher"
-              className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
+              className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:border data-[state=active]:border-border/60 data-[state=active]:bg-card data-[state=active]:shadow-md sm:gap-2 sm:text-sm"
             >
               <User className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
               <span className="truncate">{t("tabsTeacher")}</span>
@@ -165,14 +186,14 @@ export function CloudExplorer({
           ) : null}
           <TabsTrigger
             value="student"
-            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
+            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:border data-[state=active]:border-border/60 data-[state=active]:bg-card data-[state=active]:shadow-md sm:gap-2 sm:text-sm"
           >
             <Users className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
             <span className="truncate">{t("tabsStudent")}</span>
           </TabsTrigger>
           <TabsTrigger
             value="all"
-            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
+            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:border data-[state=active]:border-border/60 data-[state=active]:bg-card data-[state=active]:shadow-md sm:gap-2 sm:text-sm"
           >
             <Files className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
             <span className="truncate">{t("tabsAllDocuments")}</span>
@@ -266,7 +287,7 @@ export function CloudExplorer({
 
 function EmptyExplorerHint({ children }: { children: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-border/80 bg-muted/30 px-6 py-12 text-center text-sm text-muted-foreground">
+    <div className="rounded-2xl border border-dashed border-border/70 bg-muted/25 px-6 py-14 text-center text-sm text-muted-foreground dark:bg-muted/15">
       {children}
     </div>
   );
@@ -305,11 +326,11 @@ function ExplorerCard({
   return (
     <div
       className={cn(
-        "group flex flex-col overflow-hidden rounded-2xl border bg-card/90 shadow-md ring-0 transition",
-        "hover:-translate-y-0.5 hover:shadow-lg dark:bg-card/80",
+        "group relative flex flex-col overflow-hidden rounded-2xl border bg-card shadow-md ring-1 ring-black/[0.03] transition dark:bg-card/85 dark:ring-white/[0.05]",
+        "hover:-translate-y-1 hover:shadow-xl dark:hover:shadow-black/40",
         emphasizePrincipal && kind === "class"
           ? "border-red-600/55 ring-2 ring-red-600/75 hover:border-red-700/55 dark:border-red-500/45 dark:ring-red-500/65 dark:hover:border-red-400/50"
-          : "border-border/70 hover:border-foreground/20 dark:hover:border-foreground/25",
+          : "border-border/65 hover:border-primary/25 hover:ring-primary/10 dark:hover:border-primary/35",
       )}
     >
       <div className="flex items-start justify-between gap-3 p-4 pb-2">
@@ -346,10 +367,10 @@ function ExplorerCard({
           <p className="mt-2 text-[11px] text-muted-foreground/90">{meta}</p>
         ) : null}
       </div>
-      <div className="mt-auto border-t border-border/50 bg-muted/20 p-3 dark:bg-muted/10">
+      <div className="mt-auto border-t border-border/50 bg-gradient-to-b from-muted/25 to-muted/40 p-3.5 dark:from-muted/15 dark:to-muted/30">
         <Link
           href={href}
-          className="inline-flex w-full items-center justify-center rounded-xl border border-border bg-background px-4 py-2.5 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted/80 dark:hover:bg-muted/50"
+          className="inline-flex w-full items-center justify-center rounded-xl border border-transparent bg-background/90 px-4 py-2.5 text-xs font-semibold text-foreground shadow-sm transition hover:border-primary/20 hover:bg-primary/[0.06] hover:text-primary dark:bg-background/70"
         >
           {t("openFolder")}
         </Link>

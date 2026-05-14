@@ -52,9 +52,9 @@ export function CloudFolderFileGrid({
         return (
           <div
             key={f.id}
-            className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:border-foreground/20 hover:shadow-md"
+            className="group flex flex-col overflow-hidden rounded-2xl border border-border/65 bg-card shadow-md ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lg dark:bg-card/90 dark:ring-white/[0.04] dark:hover:shadow-black/35"
           >
-            <div className="relative aspect-square w-full bg-muted/50">
+            <div className="relative aspect-square w-full bg-gradient-to-b from-muted/60 to-muted/30 dark:from-muted/40 dark:to-muted/15">
               {preview ? (
                 <img
                   src={f.signedUrl!}
@@ -64,15 +64,15 @@ export function CloudFolderFileGrid({
                   decoding="async"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center p-6">
+                <div className="flex h-full items-center justify-center p-6 transition group-hover:scale-[1.02]">
                   <FileText
-                    className="h-14 w-14 shrink-0 text-muted-foreground md:h-16 md:w-16"
+                    className="h-14 w-14 shrink-0 text-muted-foreground/80 transition group-hover:text-primary/70 md:h-16 md:w-16"
                     aria-hidden
                   />
                 </div>
               )}
             </div>
-            <div className="flex flex-1 flex-col gap-2 p-3">
+            <div className="flex flex-1 flex-col gap-2 border-t border-border/40 bg-muted/10 p-3.5 dark:bg-muted/5">
               <div className="flex flex-wrap items-start gap-1.5 gap-y-1">
                 <CloudDocumentAudienceBadge audience={f.cloudAudience} />
                 <p className="line-clamp-2 min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">

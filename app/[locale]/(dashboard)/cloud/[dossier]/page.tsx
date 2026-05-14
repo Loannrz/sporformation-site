@@ -201,16 +201,16 @@ export default async function CloudFolderPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/55 bg-muted/20 px-4 py-3.5 shadow-sm backdrop-blur-sm dark:bg-muted/10 sm:px-5">
         <Link
           href="/cloud"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-primary"
+          className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-muted-foreground transition hover:bg-background/80 hover:text-primary"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4 shrink-0" />
           {t("title")}
         </Link>
         {user.role === "ELEVE" ? (
-          inStudentDepositZone && folderPick.length > 0 ? (
+          folderPick.length > 0 ? (
             <CloudUploadDocumentButton
               locale={params.locale}
               viewer={{ firstName: user.firstName, lastName: user.lastName }}
@@ -264,7 +264,6 @@ export default async function CloudFolderPage({
           locale={params.locale}
           viewerRole={user.role}
           displayTitle={displayTitle}
-          subtitle={t("folderDetailSubtitleClass")}
           folderLinkBase={folderLinkBase}
           currentFolderId={currentFolderId}
           classFolderRows={classFolderRows}
@@ -285,13 +284,15 @@ export default async function CloudFolderPage({
           }
         />
       ) : (
-        <Card className="overflow-hidden border-border/80 shadow-sm">
-          <CardHeader className="border-b border-border/60 bg-muted/15 pb-6">
+        <Card className="overflow-hidden rounded-2xl border-border/65 shadow-lg shadow-black/[0.03] ring-1 ring-black/[0.03] dark:shadow-black/25 dark:ring-white/[0.06]">
+          <CardHeader className="border-b border-border/50 bg-gradient-to-br from-muted/35 via-muted/15 to-transparent pb-6 dark:from-muted/25">
             <CardTitle className="text-2xl font-semibold tracking-tight">
               {displayTitle}
             </CardTitle>
-            <CardDescription className="text-base">
-              {t("folderDetailSubtitle")}
+            <CardDescription className="text-base text-muted-foreground">
+              {parsed?.kind === "student"
+                ? t("folderStudentDepositSubtitle")
+                : t("folderDetailSubtitle")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8 p-6 sm:p-8">

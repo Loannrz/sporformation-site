@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { signOutAction } from "@/app/actions/auth";
+import { isStudentUser } from "@/lib/roles";
 import type { SessionUser } from "@/types";
 import { ChevronDown, Search, Settings, UserRound } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
@@ -90,7 +91,11 @@ export function DashboardHeader({ user }: Props) {
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link
-                  href={`/profil/${user.id}`}
+                  href={
+                    isStudentUser(user)
+                      ? "/parametres"
+                      : `/profil/${user.id}`
+                  }
                   className="flex cursor-pointer items-center gap-2"
                 >
                   <UserRound className="h-4 w-4" /> {tNav("profile")}

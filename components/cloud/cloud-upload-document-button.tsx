@@ -70,15 +70,21 @@ export function CloudUploadDocumentButton({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(
-    studentDeposit ? forcedClassId : defaultClassId,
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(() =>
+    studentDeposit
+      ? forcedClassId
+      : defaultClassId ?? classOptions[0]?.id ?? null,
   );
 
   useEffect(() => {
     if (open) {
-      setSelectedClassId(studentDeposit ? forcedClassId : defaultClassId);
+      setSelectedClassId(
+        studentDeposit
+          ? forcedClassId
+          : defaultClassId ?? classOptions[0]?.id ?? null,
+      );
     }
-  }, [open, defaultClassId, forcedClassId, studentDeposit]);
+  }, [open, defaultClassId, forcedClassId, studentDeposit, classOptions]);
 
   const depositorLabel = `${viewer.firstName} ${viewer.lastName}`.trim();
 
@@ -93,7 +99,7 @@ export function CloudUploadDocumentButton({
     studentDeposit
       ? [
           { Icon: FileUp, step: "uploadVisualStepAttachment" as const },
-          { Icon: School, step: "uploadVisualStepClass" as const },
+          { Icon: School, step: "uploadVisualStepPlacementStudent" as const },
           { Icon: ClipboardList, step: "uploadVisualStepDetails" as const },
         ]
       : [
@@ -113,9 +119,13 @@ export function CloudUploadDocumentButton({
       </DialogTrigger>
       <DialogContent className="max-h-[min(90vh,720px)] overflow-y-auto border-border/80 bg-card/95 shadow-lg sm:max-w-lg">
         <DialogHeader className="space-y-4 text-center sm:text-left">
-          <DialogTitle>{t("uploadDialogTitle")}</DialogTitle>
+          <DialogTitle>
+            {studentDeposit ? t("uploadDialogTitleStudent") : t("uploadDialogTitle")}
+          </DialogTitle>
           <DialogDescription className="sr-only">
-            {t("uploadDialogAriaSummary")}
+            {studentDeposit
+              ? t("uploadDialogAriaSummaryStudent")
+              : t("uploadDialogAriaSummary")}
           </DialogDescription>
           <ol
             className={cn(
@@ -187,25 +197,32 @@ export function CloudUploadDocumentButton({
           {!studentDeposit ? (
             <div className="space-y-2">
               <Label htmlFor="cloud-up-class">{t("uploadFieldClass")}</Label>
-              <select
-                id="cloud-up-class"
-                name="classId"
-                required
-                disabled={pending}
-                value={selectedClassId ?? "__none__"}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSelectedClassId(v === "__none__" ? null : v);
-                }}
-                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="__none__">{t("uploadNoClass")}</option>
-                {classOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+              {classOptions.length === 0 ? (
+                <p className="text-sm text-destructive">{t("uploadNoClassAvailable")}</p>
+              ) : (
+                <>
+                  <select
+                    id="cloud-up-class"
+                    name="classId"
+                    required
+                    disabled={pending}
+                    value={selectedClassId ?? classOptions[0]!.id}
+                    onChange={(e) => {
+                      setSelectedClassId(e.target.value);
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {classOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    {t("uploadClassRequiredStaff")}
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <input type="hidden" name="classId" value={forcedClassId ?? ""} />
@@ -227,6 +244,7 @@ export function CloudUploadDocumentButton({
             }
             selectId="cloud-up-class-folder"
             disabled={pending}
+            studentDeposit={studentDeposit}
           />
 
           {!studentDeposit ? (
@@ -289,7 +307,11 @@ export function CloudUploadDocumentButton({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="cloud-up-depositor">{t("uploadFieldDepositor")}</Label>
+            <Label htmlFor="cloud-up-depositor">
+              {studentDeposit
+                ? t("uploadFieldDepositorStudent")
+                : t("uploadFieldDepositor")}
+            </Label>
             <Input
               id="cloud-up-depositor"
               value={depositorLabel}
@@ -310,8 +332,12 @@ export function CloudUploadDocumentButton({
             >
               {t("uploadCancel")}
             </Button>
-            <Button type="submit" disabled={pending} variant="accent">
-              {pending ? t("uploadSubmitting") : t("uploadSubmit")}
+            <Button type="submit" disabled={pending || (!studentDeposit && classOptions.length === 0)} variant="accent">
+              {pending
+                ? t("uploadSubmitting")
+                : studentDeposit
+                  ? t("uploadSubmitStudent")
+                  : t("uploadSubmit")}
             </Button>
           </DialogFooter>
         </form>

@@ -85,13 +85,19 @@ export function CloudFolderFileBrowser({
   const needle = query.trim();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div
         className={cn(
-          "flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4",
-          hideSearch && "lg:justify-end",
+          "rounded-2xl border border-border/55 bg-muted/25 p-4 shadow-inner dark:bg-muted/15",
+          hideSearch && "flex justify-end",
         )}
       >
+        <div
+          className={cn(
+            "flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4",
+            hideSearch && "lg:justify-end",
+          )}
+        >
         {!hideSearch ? (
           <div className="relative w-full lg:max-w-sm">
             <Search
@@ -100,7 +106,7 @@ export function CloudFolderFileBrowser({
             />
             <Input
               type="search"
-              className="pl-9"
+              className="h-10 rounded-xl border-border/65 bg-background/95 pl-9 shadow-sm"
               placeholder={t("folderSearchPlaceholder")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -179,13 +185,14 @@ export function CloudFolderFileBrowser({
             variant={sort === "name-desc" ? "secondary" : "outline"}
             onClick={() => setSort("name-desc")}
             className={cn(
-              "text-xs sm:text-sm",
+              "rounded-lg text-xs sm:text-sm",
               sort === "name-desc" && "border-foreground/15 bg-muted/90 shadow-sm dark:bg-muted",
             )}
           >
             {t("folderSortNameZA")}
           </Button>
         </div>
+      </div>
       </div>
 
       {processed.length === 0 ? (

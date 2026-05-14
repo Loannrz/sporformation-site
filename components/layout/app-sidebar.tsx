@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { Link, usePathname } from "@/i18n/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import type { SessionUser } from "@/types";
-import { buildNavItems } from "@/components/layout/nav-config";
+import {
+  buildNavItems,
+  isNavLinkActive,
+  type NavItem,
+} from "@/components/layout/nav-config";
 import { SporformationLogo } from "@/components/logo/sporformation-logo";
 import { DisciplineQuickDialog } from "@/components/discipline/discipline-quick-dialog";
 import type { DisciplineDialogOptions } from "@/lib/data/school";
@@ -19,6 +24,109 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+const EMPTY_SEARCH = new URLSearchParams();
+
+type NavLinkShellProps = {
+  iconOnly: boolean;
+  items: NavItem[];
+  user: SessionUser;
+  pathname: string;
+  searchParams: URLSearchParams;
+  disciplineOptions: DisciplineDialogOptions | null;
+  notificationCount: number;
+  linkCls: (active: boolean, iconOnly: boolean) => string;
+  onNavigate: () => void;
+};
+
+function SidebarNavLinks({
+  iconOnly,
+  items,
+  user,
+  pathname,
+  searchParams,
+  disciplineOptions,
+  notificationCount,
+  linkCls,
+  onNavigate,
+}: NavLinkShellProps) {
+  const t = useTranslations("nav");
+
+  return (
+    <nav className="flex flex-1 flex-col gap-1 p-3">
+      {items.map((item) => {
+        if (item.kind === "discipline-dialog") {
+          if (!disciplineOptions) return null;
+          return (
+            <DisciplineQuickDialog
+              key="discipline-dialog"
+              options={disciplineOptions}
+              iconOnly={iconOnly}
+              linkCls={linkCls}
+              onMobileNavDismiss={onNavigate}
+            />
+          );
+        }
+
+        const href = item.href;
+        const active = isNavLinkActive(pathname, searchParams, item, user);
+        const linkKey = `${item.labelKey}-${href}`;
+        const Icon = item.icon;
+        const label = t(item.labelKey);
+        const badge =
+          item.labelKey === "messaging" && notificationCount > 0 ? (
+            <span
+              className={cn(
+                "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground",
+                !iconOnly && "ml-auto",
+              )}
+            >
+              {notificationCount > 9 ? "9+" : notificationCount}
+            </span>
+          ) : null;
+
+        const linkBody = (
+          <Link
+            href={href}
+            onClick={onNavigate}
+            className={linkCls(active, iconOnly)}
+          >
+            <span className="relative shrink-0">
+              <Icon className="h-4 w-4 opacity-80" />
+              {iconOnly && badge ? (
+                <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold leading-none text-primary-foreground">
+                  {notificationCount > 9 ? "+" : notificationCount}
+                </span>
+              ) : null}
+            </span>
+            {!iconOnly ? (
+              <>
+                <span className="min-w-0 truncate">{label}</span>
+                {badge}
+              </>
+            ) : null}
+          </Link>
+        );
+
+        if (iconOnly) {
+          return (
+            <Tooltip key={linkKey} delayDuration={300}>
+              <TooltipTrigger asChild>{linkBody}</TooltipTrigger>
+              <TooltipContent side="right">{label}</TooltipContent>
+            </Tooltip>
+          );
+        }
+
+        return <div key={linkKey}>{linkBody}</div>;
+      })}
+    </nav>
+  );
+}
+
+function SidebarNavLinksWithSearch(props: Omit<NavLinkShellProps, "searchParams">) {
+  const searchParams = useSearchParams();
+  return <SidebarNavLinks {...props} searchParams={searchParams} />;
+}
 
 type Props = {
   user: SessionUser;
@@ -33,7 +141,6 @@ export function AppSidebar({
   notificationCount = 0,
   disciplineOptions,
 }: Props) {
-  const t = useTranslations("nav");
   const pathname = usePathname();
   const items = buildNavItems(user);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -94,75 +201,29 @@ export function AppSidebar({
     return block;
   };
 
+  const navShellProps = (iconOnly: boolean) =>
+    ({
+      iconOnly,
+      items,
+      user,
+      pathname,
+      disciplineOptions,
+      notificationCount,
+      linkCls,
+      onNavigate: () => setDrawerOpen(false),
+    }) satisfies Omit<NavLinkShellProps, "searchParams">;
+
   const NavInner = ({ iconOnly }: { iconOnly: boolean }) => (
-    <nav className="flex flex-1 flex-col gap-1 p-3">
-      {items.map((item) => {
-        if (item.kind === "discipline-dialog") {
-          if (!disciplineOptions) return null;
-          return (
-            <DisciplineQuickDialog
-              key="discipline-dialog"
-              options={disciplineOptions}
-              iconOnly={iconOnly}
-              linkCls={linkCls}
-              onMobileNavDismiss={() => setDrawerOpen(false)}
-            />
-          );
-        }
-
-        const href = item.href;
-        const active =
-          pathname === href || pathname.startsWith(`${href}/`);
-        const Icon = item.icon;
-        const label = t(item.labelKey);
-        const badge =
-          href === "/messagerie" && notificationCount > 0 ? (
-            <span
-              className={cn(
-                "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground",
-                !iconOnly && "ml-auto",
-              )}
-            >
-              {notificationCount > 9 ? "9+" : notificationCount}
-            </span>
-          ) : null;
-
-        const linkBody = (
-          <Link
-            key={href}
-            href={href}
-            onClick={() => setDrawerOpen(false)}
-            className={linkCls(active, iconOnly)}
-          >
-            <span className="relative shrink-0">
-              <Icon className="h-4 w-4 opacity-80" />
-              {iconOnly && badge ? (
-                <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold leading-none text-primary-foreground">
-                  {notificationCount > 9 ? "+" : notificationCount}
-                </span>
-              ) : null}
-            </span>
-            {!iconOnly ? (
-              <>
-                <span className="min-w-0 truncate">{label}</span>
-                {badge}
-              </>
-            ) : null}
-          </Link>
-        );
-
-        if (iconOnly) {
-          return (
-            <Tooltip key={href} delayDuration={300}>
-              <TooltipTrigger asChild>{linkBody}</TooltipTrigger>
-              <TooltipContent side="right">{label}</TooltipContent>
-            </Tooltip>
-          );
-        }
-
-        return linkBody;
-      })}
-    </nav>
+    <Suspense
+      fallback={
+        <SidebarNavLinks
+          {...navShellProps(iconOnly)}
+          searchParams={EMPTY_SEARCH}
+        />
+      }
+    >
+      <SidebarNavLinksWithSearch {...navShellProps(iconOnly)} />
+    </Suspense>
   );
 
   return (

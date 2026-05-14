@@ -20,10 +20,21 @@ import { redirect } from "@/i18n/navigation";
 
 export const dynamic = "force-dynamic";
 
+const EXPLORER_TABS = ["class", "teacher", "student", "all"] as const;
+
+function readSearchParam(
+  v: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
 export default async function CloudPage({
   params,
+  searchParams,
 }: {
   params: { locale: AppLocale };
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const user = await getSessionUser();
   const t = await getTranslations({
@@ -54,6 +65,13 @@ export default async function CloudPage({
 
   const scopedClassIds = teacherCloudScopedClassIds(user);
   const establishmentScope = viewerHasEstablishmentCloudScope(user);
+
+  const tabRaw = readSearchParam(searchParams?.tab);
+  const initialExplorerTab = EXPLORER_TABS.includes(
+    tabRaw as (typeof EXPLORER_TABS)[number],
+  )
+    ? (tabRaw as (typeof EXPLORER_TABS)[number])
+    : undefined;
 
   const folders = await fetchCloudExplorerFolders(user.role, {
     ...(scopedClassIds != null
@@ -92,11 +110,15 @@ export default async function CloudPage({
 
   return (
     <div className="space-y-8">
-      <Card className="border-none bg-transparent shadow-none">
-        <CardHeader className="flex flex-col gap-4 space-y-0 px-0 pt-0 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1.5">
-            <CardTitle className="text-3xl font-semibold">{t("title")}</CardTitle>
-            <CardDescription>{t("subtitle")}</CardDescription>
+      <div className="overflow-hidden rounded-3xl border border-border/65 bg-gradient-to-br from-sky-500/[0.07] via-muted/25 to-violet-500/[0.06] p-6 shadow-md ring-1 ring-black/[0.04] dark:from-sky-500/12 dark:via-muted/15 dark:to-violet-500/10 dark:ring-white/[0.06] sm:p-8">
+        <div className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <CardTitle className="text-3xl font-semibold tracking-tight">
+              {t("title")}
+            </CardTitle>
+            <CardDescription className="text-base text-muted-foreground">
+              {t("subtitle")}
+            </CardDescription>
           </div>
           <CloudUploadDocumentButton
             locale={params.locale}
@@ -105,14 +127,15 @@ export default async function CloudPage({
             studentOptions={studentOptions}
             defaultClassId={null}
           />
-        </CardHeader>
-      </Card>
+        </div>
+      </div>
       <CloudExplorer
         locale={params.locale}
         viewerId={user.id}
         viewerIsDirector={establishmentScope}
         hideExplorerSearch={!establishmentScope}
         showTeacherExplorerTab={establishmentScope}
+        initialExplorerTab={initialExplorerTab}
         classOptions={classOptions}
         studentOptions={studentOptions}
         classFolders={folders.classes}

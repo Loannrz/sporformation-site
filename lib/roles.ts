@@ -28,6 +28,23 @@ export function isStudentUser(user: SessionUser | null): boolean {
   return user?.role === "ELEVE";
 }
 
+/** Fiches profil du personnel (`/profil/[id]`) : réservées aux collègues, pas aux élèves. */
+export function canViewStaffDirectoryProfiles(user: SessionUser | null): boolean {
+  if (!user) return false;
+  return (
+    user.role === "PROFESSEUR" ||
+    user.role === "PROF_PRINCIPAL" ||
+    user.role === "DIRECTEUR" ||
+    user.role === "ADMINISTRATEUR"
+  );
+}
+
+/** Fiche dossier élève (`/etudiants/[id]`) : personnel uniquement. */
+export function canViewStudentDossierPage(user: SessionUser | null): boolean {
+  if (!user) return false;
+  return user.role !== "ELEVE";
+}
+
 export function profileRoleToUserRole(raw: string): UserRole {
   if (
     raw === "DIRECTEUR" ||

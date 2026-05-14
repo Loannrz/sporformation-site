@@ -2,7 +2,10 @@ import { AdminBackLink } from "@/components/admin/admin-back-link";
 import { CreateTeacherModal } from "@/components/admin/create-teacher-modal";
 import { StaffAccountsSearchGrid } from "@/components/admin/staff-accounts-search-grid";
 import { fetchAdminClassOptions } from "@/lib/data/school";
-import { fetchAllStaffForAdmin } from "@/lib/data/staff-admin";
+import {
+  fetchAllStaffForAdmin,
+  fetchPendingTeacherInvitesForAdmin,
+} from "@/lib/data/staff-admin";
 import { getSessionUser } from "@/lib/session-server";
 import { isDirector, isStaffAdmin } from "@/lib/roles";
 import { redirectToAccessDenied } from "@/lib/guards";
@@ -28,14 +31,20 @@ export default async function AdminAccountsPage({
     namespace: "admin.accounts",
   });
 
-  const [staffList, classOptions] = await Promise.all([
+  const [staffList, pendingRaw, classOptions] = await Promise.all([
     fetchAllStaffForAdmin(),
+    fetchPendingTeacherInvitesForAdmin(),
     fetchAdminClassOptions(),
   ]);
   const visible = isDirector(user)
     ? staffList
     : staffList.filter(
         (s) => s.role === "PROFESSEUR" || s.role === "PROF_PRINCIPAL",
+      );
+  const pendingInvites = isDirector(user)
+    ? pendingRaw
+    : pendingRaw.filter(
+        (p) => p.role === "PROFESSEUR" || p.role === "PROF_PRINCIPAL",
       );
 
   return (
@@ -56,6 +65,7 @@ export default async function AdminAccountsPage({
       </div>
       <StaffAccountsSearchGrid
         staff={visible}
+        pendingInvites={pendingInvites}
         locale={params.locale}
         viewerId={user.id}
         viewerRole={user.role}

@@ -6,8 +6,8 @@ import type { AppLocale } from "@/i18n/routing";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { isProfilesExtendedColumnsUnavailable } from "@/lib/supabase/profile-columns";
 import { getSessionUser } from "@/lib/session-server";
-import { canManageTeacherAccounts, isDirector } from "@/lib/roles";
-import type { TeacherEmploymentStatus, UserRole } from "@/types";
+import { canManageTeacherAccounts, isDirector, profileRoleToUserRole } from "@/lib/roles";
+import type { SessionUser, TeacherEmploymentStatus, UserRole } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const UUID_RE =
@@ -203,6 +203,15 @@ async function requireTeacherManager() {
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
   return { ok: true as const, user };
+}
+
+function viewerMayDeletePendingInvite(
+  viewer: SessionUser,
+  inviteRole: UserRole,
+): boolean {
+  if (!canManageTeacherAccounts(viewer)) return false;
+  if (isDirector(viewer)) return true;
+  return inviteRole === "PROFESSEUR" || inviteRole === "PROF_PRINCIPAL";
 }
 
 async function purgeTeacherFiles(admin: SupabaseClient, ownerId: string) {
@@ -847,6 +856,73 @@ export async function reactivateTeacherEstablishmentAction(
   revalidatePath(`/${locale}/profil/${teacherId}`);
   revalidatePath(`/${locale}/cloud`);
   return { ok: true as const };
+}
+
+/** Retire une invitation « pas encore connecté » : suppression de la ligne `teacher_pending_signups`. */
+export async function deletePendingTeacherInviteAction(
+  locale: AppLocale,
+  email: string,
+): Promise<
+  | { ok: true }
+  | {
+      ok: false;
+      error:
+        | "FORBIDDEN"
+        | "NO_SERVICE_ROLE"
+        | "INVALID_EMAIL"
+        | "NOT_FOUND"
+        | "GENERIC";
+      detail?: string;
+    }
+> {
+  const gate = await requireTeacherManager();
+  if (!gate.ok) return { ok: false, error: "FORBIDDEN" };
+
+  const normalized = email.trim().toLowerCase();
+  if (!normalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    return { ok: false, error: "INVALID_EMAIL" };
+  }
+
+  const admin = createAdminSupabase();
+  if (!admin) return { ok: false, error: "NO_SERVICE_ROLE" };
+
+  const { data: row, error: selErr } = await admin
+    .from("teacher_pending_signups")
+    .select("email,base_role")
+    .eq("email", normalized)
+    .maybeSingle();
+
+  if (selErr) {
+    return {
+      ok: false,
+      error: "GENERIC",
+      detail:
+        process.env.NODE_ENV === "development" ? selErr.message : undefined,
+    };
+  }
+  if (!row) return { ok: false, error: "NOT_FOUND" };
+
+  const inviteRole = profileRoleToUserRole(String(row.base_role));
+  if (!viewerMayDeletePendingInvite(gate.user, inviteRole)) {
+    return { ok: false, error: "FORBIDDEN" };
+  }
+
+  const { error: delErr } = await admin
+    .from("teacher_pending_signups")
+    .delete()
+    .eq("email", normalized);
+
+  if (delErr) {
+    return {
+      ok: false,
+      error: "GENERIC",
+      detail:
+        process.env.NODE_ENV === "development" ? delErr.message : undefined,
+    };
+  }
+
+  revalidatePath(`/${locale}/administration/comptes`);
+  return { ok: true };
 }
 
 export async function deleteTeacherAndDocumentsAction(

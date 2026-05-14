@@ -762,7 +762,7 @@ export async function fetchSanctionsForStudent(
 }
 
 export async function fetchRecentSanctionsRows(limit: number) {
-  const supabase = await supabaseOrNull();
+  const supabase = await staffReadSupabase();
   if (!supabase) return [];
   const { data: rows, error } = await supabase
     .from("sanctions")
@@ -775,8 +775,9 @@ export async function fetchRecentSanctionsRows(limit: number) {
   const ids = rows.map((r) => r.id);
   const profileMap = await loadProfileMap(
     rows.flatMap((r) => [r.author_id, r.retired_by]),
+    supabase,
   );
-  const attMap = await loadAttachmentsForSanctions(ids);
+  const attMap = await loadAttachmentsForSanctions(ids, supabase);
   return rows.map((r) =>
     mapSanctionDbToApp(r, profileMap, attMap.get(r.id) ?? []),
   );
@@ -792,7 +793,7 @@ export async function fetchRecentSanctionsForUser(
   }
   const scope = new Set(user.principalClassIds ?? []);
   if (scope.size === 0) return [];
-  const supabase = await supabaseOrNull();
+  const supabase = await staffReadSupabase();
   if (!supabase) return [];
   const studentIds = [...new Set(rows.map((r) => r.studentId))];
   if (studentIds.length === 0) return [];
@@ -807,6 +808,32 @@ export async function fetchRecentSanctionsForUser(
     return cid && scope.has(cid);
   });
   return filtered.slice(0, limit);
+}
+
+/** Prénom / nom pour affichage dashboard (lecture staff). */
+export async function fetchStudentDisplayNamesByIds(
+  studentIds: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const unique = [...new Set(studentIds)].filter(Boolean);
+  if (unique.length === 0) return map;
+  const supabase = await staffReadSupabase();
+  if (!supabase) return map;
+  const { data, error } = await supabase
+    .from("students")
+    .select("id,first_name,last_name")
+    .in("id", unique);
+  if (error || !data?.length) return map;
+  for (const row of data as {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+  }[]) {
+    const label =
+      `${row.first_name ?? ""} ${row.last_name ?? ""}`.trim() || row.id;
+    map.set(row.id, label);
+  }
+  return map;
 }
 
 export async function fetchSanctionsForClassStudents(
@@ -982,10 +1009,10 @@ export async function fetchCloudStudentUploadOptions(opts?: {
 
   if (error || !data) return [];
 
+  /** `undefined` = pas de restriction (direction). `[]` ou liste = uniquement ces classes. */
+  const restrictIds = opts?.restrictClassIds;
   const restrict =
-    opts?.restrictClassIds && opts.restrictClassIds.length > 0
-      ? new Set(opts.restrictClassIds)
-      : null;
+    restrictIds != null ? new Set(restrictIds) : null;
 
   let studs = data as {
     id: string;
@@ -994,7 +1021,7 @@ export async function fetchCloudStudentUploadOptions(opts?: {
     class_id: string | null;
   }[];
 
-  if (restrict) {
+  if (restrict !== null) {
     studs = studs.filter((s) => {
       const cid = s.class_id;
       return Boolean(cid && restrict.has(cid));

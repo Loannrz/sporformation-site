@@ -46,7 +46,6 @@ function errorMessage(code: string, t: (key: string) => string): string {
     NOT_PARTICIPANT: "errors.NOT_PARTICIPANT",
     EMPTY_MESSAGE: "errors.EMPTY_MESSAGE",
     INVALID_CONVERSATION: "errors.INVALID_CONVERSATION",
-    PROFILE_REQUIRED: "errors.PROFILE_REQUIRED",
   };
   const k = map[code];
   return k ? t(k) : code;

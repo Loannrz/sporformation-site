@@ -201,6 +201,49 @@ function displayName(
   return n || "—";
 }
 
+async function hydrateDisplayNamesByUserIds(
+  supabase: NonNullable<Awaited<ReturnType<typeof getClient>>>,
+  userIds: string[],
+): Promise<Map<string, string>> {
+  const uniq = [...new Set(userIds.filter(Boolean))];
+  const out = new Map<string, string>();
+  if (!uniq.length) return out;
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id,first_name,last_name")
+    .in("id", uniq);
+  const seen = new Set<string>();
+  for (const p of profiles ?? []) {
+    const id = (p as { id: string }).id;
+    seen.add(id);
+    out.set(id, displayName(p as { first_name?: string; last_name?: string }));
+  }
+
+  const missing = uniq.filter((id) => !seen.has(id));
+  if (!missing.length) return out;
+
+  const { data: studs } = await supabase
+    .from("students")
+    .select("auth_user_id,first_name,last_name")
+    .in("auth_user_id", missing);
+
+  for (const s of studs ?? []) {
+    const aid = (s as { auth_user_id?: string | null }).auth_user_id;
+    if (!aid) continue;
+    const label = displayName({
+      first_name: (s as { first_name?: string }).first_name,
+      last_name: (s as { last_name?: string }).last_name,
+    });
+    out.set(aid, label);
+  }
+
+  for (const id of missing) {
+    if (!out.has(id)) out.set(id, "—");
+  }
+  return out;
+}
+
 export async function fetchMessagingConversationsList(
   profileId: string,
   locale: "fr" | "en",
@@ -249,18 +292,8 @@ export async function fetchMessagingConversationsList(
   }
 
   const peerIds = [...new Set([...peersByConv.values()].flat())];
-  const { data: peerProfiles } = peerIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id,first_name,last_name")
-        .in("id", peerIds)
-    : { data: [] };
-
-  const nameById = new Map(
-    (peerProfiles as { id: string; first_name: string; last_name: string }[] | null)?.map(
-      (p) => [p.id, displayName(p)],
-    ) ?? [],
-  );
+  const nameById =
+    peerIds.length > 0 ? await hydrateDisplayNamesByUserIds(supabase, peerIds) : new Map<string, string>();
 
   const items: MessagingConversationListItem[] = [];
 
@@ -355,21 +388,22 @@ export async function fetchConversationParticipants(
     }[] | null)?.map((p) => [p.id, p]) ?? [],
   );
 
+  const nameByParticipant = await hydrateDisplayNamesByUserIds(supabase, ids);
+
   return (parts as { profile_id: string; last_read_at: string | null }[]).map(
     (row) => {
       const p = profById.get(row.profile_id);
       const br = p?.base_role ?? null;
       const className = classByAuth.get(row.profile_id) ?? null;
-      const subtitle =
-        br === "ELEVE" && className
-          ? locale === "fr"
-            ? `Élève · ${className}`
-            : `Student · ${className}`
-          : roleLabel(br);
+      const subtitle = className
+        ? locale === "fr"
+          ? `Élève · ${className}`
+          : `Student · ${className}`
+        : roleLabel(br);
 
       return {
         profileId: row.profile_id,
-        displayName: displayName(p ?? null),
+        displayName: nameByParticipant.get(row.profile_id) ?? displayName(p ?? null),
         avatarUrl: p?.avatar_url ?? null,
         subtitle,
         lastReadAt: row.last_read_at,

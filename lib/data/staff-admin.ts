@@ -190,6 +190,55 @@ export async function fetchAllStaffForAdmin(): Promise<StaffAdminRow[]> {
   return res.data.map(mapStaffRow);
 }
 
+/** Invitation sans compte Auth (table `teacher_pending_signups`). */
+export type PendingTeacherInviteRow = {
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  teacherEmploymentStatus: TeacherEmploymentStatus | null;
+  principalClassIds: string[];
+  createdAt: string | null;
+};
+
+export async function fetchPendingTeacherInvitesForAdmin(): Promise<
+  PendingTeacherInviteRow[]
+> {
+  const admin = createAdminSupabase();
+  if (!admin) return [];
+
+  const { data, error } = await admin
+    .from("teacher_pending_signups")
+    .select(
+      "email,first_name,last_name,base_role,teacher_employment_status,principal_class_ids,created_at",
+    )
+    .order("created_at", { ascending: false });
+
+  if (error || !data?.length) return [];
+
+  return (
+    data as {
+      email: string;
+      first_name: string;
+      last_name: string;
+      base_role: string;
+      teacher_employment_status: string | null;
+      principal_class_ids: string[] | null;
+      created_at: string | null;
+    }[]
+  ).map((row) => ({
+    email: row.email,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    role: profileRoleToUserRole(String(row.base_role)),
+    teacherEmploymentStatus: (row.teacher_employment_status as TeacherEmploymentStatus) ?? null,
+    principalClassIds: Array.isArray(row.principal_class_ids)
+      ? row.principal_class_ids
+      : [],
+    createdAt: row.created_at ?? null,
+  }));
+}
+
 export async function fetchStaffByIdForAdmin(
   id: string,
 ): Promise<StaffAdminRow | null> {

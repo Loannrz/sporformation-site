@@ -21,7 +21,11 @@ export async function updateMyProfileAction(
   const supabase = await createServerSupabase();
   if (!supabase) return { ok: false as const, error: "NO_DB" as const };
 
-  const email = input.email.trim();
+  /** L’adresse e-mail des comptes élèves est imposée par l’établissement ; pas de changement via ce formulaire. */
+  const email =
+    user.role === "ELEVE"
+      ? user.email.trim()
+      : input.email.trim();
   const patch: Record<string, unknown> = {
     first_name: input.firstName.trim(),
     last_name: input.lastName.trim(),
@@ -41,7 +45,7 @@ export async function updateMyProfileAction(
 
   if (error) return { ok: false as const, error: error.message };
 
-  if (email.length) {
+  if (user.role !== "ELEVE" && email.length) {
     const { error: authErr } = await supabase.auth.updateUser({ email });
     if (authErr) return { ok: false as const, error: authErr.message };
   }

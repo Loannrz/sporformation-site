@@ -124,13 +124,13 @@ create table if not exists public.conversations (
   id uuid primary key default gen_random_uuid(),
   is_group boolean default false,
   name text,
-  created_by uuid references public.profiles(id),
+  created_by uuid references auth.users(id) on delete set null,
   created_at timestamptz default now()
 );
 
 create table if not exists public.conversation_participants (
   conversation_id uuid references public.conversations(id) on delete cascade,
-  profile_id uuid references public.profiles(id) on delete cascade,
+  profile_id uuid references auth.users(id) on delete cascade,
   joined_at timestamptz default now(),
   primary key (conversation_id, profile_id)
 );
@@ -138,7 +138,7 @@ create table if not exists public.conversation_participants (
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid references public.conversations(id) on delete cascade,
-  sender_id uuid references public.profiles(id),
+  sender_id uuid references auth.users(id) on delete set null,
   body text not null,
   sent_at timestamptz default now()
 );
@@ -228,6 +228,9 @@ create policy "staff select students" on public.students
 
 create policy "staff write students" on public.students
   for all using (auth.uid() is not null) with check (auth.uid() is not null);
+
+create policy "students_select_own" on public.students
+  for select using (auth.uid() = auth_user_id);
 
 create policy "staff select sanctions" on public.sanctions
   for select using (auth.uid() is not null);

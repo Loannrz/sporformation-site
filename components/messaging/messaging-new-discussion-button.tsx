@@ -40,7 +40,6 @@ function errorMessage(
     NOT_PARTICIPANT: "errors.NOT_PARTICIPANT",
     EMPTY_MESSAGE: "errors.EMPTY_MESSAGE",
     INVALID_CONVERSATION: "errors.INVALID_CONVERSATION",
-    PROFILE_REQUIRED: "errors.PROFILE_REQUIRED",
   };
   const key = map[code];
   return key ? t(key) : code;

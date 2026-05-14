@@ -214,14 +214,27 @@ export function SettingsTabs({ user, locale, initialPhone }: Props) {
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="sf-em">{t("email")} *</Label>
+                  <Label htmlFor="sf-em">
+                    {t("email")}
+                    {user.role === "ELEVE" ? null : " *"}
+                  </Label>
                   <Input
                     id="sf-em"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    required
+                    readOnly={user.role === "ELEVE"}
+                    required={user.role !== "ELEVE"}
+                    className={
+                      user.role === "ELEVE" ? "cursor-default bg-muted/50" : undefined
+                    }
+                    autoComplete="email"
                   />
+                  {user.role === "ELEVE" ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t("emailStudentManaged")}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="sf-ph">{t("phone")}</Label>

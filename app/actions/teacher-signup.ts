@@ -76,82 +76,170 @@ export async function teacherSelfSignupAction(
     };
   }
 
-  if (!invite) {
-    return { errorCode: "INVITE_REQUIRED", devDetail: null };
-  }
-
-  if (invite.teacher_employment_status === "FORMER_INACTIVE") {
-    return { errorCode: "INVITE_INVALID", devDetail: null };
-  }
-
-  const invitation: PendingTeacherInviteRow = {
-    email: invite.email as string,
-    first_name: invite.first_name as string,
-    last_name: invite.last_name as string,
-    base_role: invite.base_role as PendingTeacherInviteRow["base_role"],
-    teacher_employment_status:
-      invite.teacher_employment_status as PendingTeacherInviteRow["teacher_employment_status"],
-    joined_at: invite.joined_at as string | null,
-    left_establishment_on: invite.left_establishment_on as string | null,
-    bio: invite.bio as string | null,
-    subjects: (invite.subjects as string[] | null) ?? [],
-    principal_class_ids: (invite.principal_class_ids as string[] | null) ?? [],
-  };
-
-  const { data: created, error: cErr } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-
-  const newId = created?.user?.id;
-
-  if (!newId || cErr) {
-    if (isAuthEmailTakenError(cErr)) {
-      return { errorCode: "ALREADY_REGISTERED", devDetail: null };
+  if (invite) {
+    if (invite.teacher_employment_status === "FORMER_INACTIVE") {
+      return { errorCode: "INVITE_INVALID", devDetail: null };
     }
+
+    const invitation: PendingTeacherInviteRow = {
+      email: invite.email as string,
+      first_name: invite.first_name as string,
+      last_name: invite.last_name as string,
+      base_role: invite.base_role as PendingTeacherInviteRow["base_role"],
+      teacher_employment_status:
+        invite.teacher_employment_status as PendingTeacherInviteRow["teacher_employment_status"],
+      joined_at: invite.joined_at as string | null,
+      left_establishment_on: invite.left_establishment_on as string | null,
+      bio: invite.bio as string | null,
+      subjects: (invite.subjects as string[] | null) ?? [],
+      principal_class_ids: (invite.principal_class_ids as string[] | null) ?? [],
+    };
+
+    const { data: created, error: cErr } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+
+    const newId = created?.user?.id;
+
+    if (!newId || cErr) {
+      if (isAuthEmailTakenError(cErr)) {
+        return { errorCode: "ALREADY_REGISTERED", devDetail: null };
+      }
+      return {
+        errorCode: "AUTH_CREATE_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development"
+            ? (cErr?.message ?? String(cErr))
+            : null,
+      };
+    }
+
+    const fin = await finalizeTeacherAccountFromPendingInvite(admin, {
+      userId: newId,
+      email,
+      invitation,
+    });
+
+    if (!fin.ok) {
+      await admin.auth.admin.deleteUser(newId);
+      return {
+        errorCode: "PROFILE_CREATE_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development" ? fin.error : null,
+      };
+    }
+
+    const serverSb = await createServerSupabase();
+    if (!serverSb) {
+      return { errorCode: "CONFIG", devDetail: null };
+    }
+
+    const { error: signErr } = await serverSb.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signErr) {
+      return {
+        errorCode: "SIGNIN_AFTER_SIGNUP_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development" ? signErr.message : null,
+      };
+    }
+
+    redirect({ href: "/dashboard", locale });
+    return initialTeacherSignupState;
+  }
+
+  const { data: pendingStudents, error: stQErr } = await admin
+    .from("students")
+    .select("id")
+    .eq("email", email)
+    .is("auth_user_id", null)
+    .not("email", "is", null);
+
+  if (stQErr) {
     return {
-      errorCode: "AUTH_CREATE_FAILED",
+      errorCode: "GENERIC",
       devDetail:
-        process.env.NODE_ENV === "development"
-          ? (cErr?.message ?? String(cErr))
-          : null,
+        process.env.NODE_ENV === "development" ? stQErr.message : null,
     };
   }
 
-  const fin = await finalizeTeacherAccountFromPendingInvite(admin, {
-    userId: newId,
-    email,
-    invitation,
-  });
-
-  if (!fin.ok) {
-    await admin.auth.admin.deleteUser(newId);
-    return {
-      errorCode: "PROFILE_CREATE_FAILED",
-      devDetail:
-        process.env.NODE_ENV === "development" ? fin.error : null,
-    };
+  const pendingList = pendingStudents ?? [];
+  if (pendingList.length > 1) {
+    return { errorCode: "INVITE_AMBIGUOUS", devDetail: null };
   }
 
-  const serverSb = await createServerSupabase();
-  if (!serverSb) {
-    return { errorCode: "CONFIG", devDetail: null };
+  if (pendingList.length === 1) {
+    const studentId = (pendingList[0] as { id: string }).id;
+
+    const { data: createdStu, error: cErrStu } =
+      await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+
+    const newUserId = createdStu?.user?.id;
+
+    if (!newUserId || cErrStu) {
+      if (isAuthEmailTakenError(cErrStu)) {
+        return { errorCode: "ALREADY_REGISTERED", devDetail: null };
+      }
+      return {
+        errorCode: "AUTH_CREATE_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development"
+            ? (cErrStu?.message ?? String(cErrStu))
+            : null,
+      };
+    }
+
+    const { data: linked, error: linkErr } = await admin
+      .from("students")
+      .update({ auth_user_id: newUserId, activated: true })
+      .eq("id", studentId)
+      .is("auth_user_id", null)
+      .select("id")
+      .maybeSingle();
+
+    if (linkErr || !linked) {
+      await admin.auth.admin.deleteUser(newUserId);
+      return {
+        errorCode: "STUDENT_LINK_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development"
+            ? (linkErr?.message ?? "no row updated")
+            : null,
+      };
+    }
+
+    const serverSbStu = await createServerSupabase();
+    if (!serverSbStu) {
+      return { errorCode: "CONFIG", devDetail: null };
+    }
+
+    const { error: signErrStu } = await serverSbStu.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signErrStu) {
+      return {
+        errorCode: "SIGNIN_AFTER_SIGNUP_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development"
+            ? signErrStu.message
+            : null,
+      };
+    }
+
+    redirect({ href: "/dashboard", locale });
+    return initialTeacherSignupState;
   }
 
-  const { error: signErr } = await serverSb.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (signErr) {
-    return {
-      errorCode: "SIGNIN_AFTER_SIGNUP_FAILED",
-      devDetail:
-        process.env.NODE_ENV === "development" ? signErr.message : null,
-    };
-  }
-
-  redirect({ href: "/dashboard", locale });
-  return initialTeacherSignupState;
+  return { errorCode: "INVITE_REQUIRED", devDetail: null };
 }

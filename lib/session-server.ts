@@ -1,3 +1,4 @@
+import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
   PROFILE_SELECT_CORE,
@@ -7,6 +8,68 @@ import {
 } from "@/lib/supabase/profile-columns";
 import { profileRoleToUserRole } from "@/lib/roles";
 import type { SessionUser, TeacherEmploymentStatus } from "@/types";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+type StudentSessionRow = {
+  id: unknown;
+  first_name: unknown;
+  last_name: unknown;
+  email: unknown;
+  class_id: unknown;
+  activated?: unknown;
+};
+
+async function fetchStudentRowForAuthUser(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<StudentSessionRow | null> {
+  const attemptFull = await supabase
+    .from("students")
+    .select(
+      "id,first_name,last_name,email,class_id,activated,auth_user_id",
+    )
+    .eq("auth_user_id", userId)
+    .maybeSingle();
+
+  let row = attemptFull.data as StudentSessionRow | null;
+  if (!attemptFull.error && row) return row;
+
+  const slim = await supabase
+    .from("students")
+    .select("id,first_name,last_name,email,class_id,auth_user_id")
+    .eq("auth_user_id", userId)
+    .maybeSingle();
+
+  if (!slim.error && slim.data) {
+    return { ...(slim.data as StudentSessionRow), activated: undefined };
+  }
+
+  const admin = createAdminSupabase();
+  if (!admin) return null;
+
+  const attemptAdminFull = await admin
+    .from("students")
+    .select(
+      "id,first_name,last_name,email,class_id,activated,auth_user_id",
+    )
+    .eq("auth_user_id", userId)
+    .maybeSingle();
+
+  row = attemptAdminFull.data as StudentSessionRow | null;
+  if (!attemptAdminFull.error && row) return row;
+
+  const admSlim = await admin
+    .from("students")
+    .select("id,first_name,last_name,email,class_id,auth_user_id")
+    .eq("auth_user_id", userId)
+    .maybeSingle();
+
+  if (!admSlim.error && admSlim.data) {
+    return { ...(admSlim.data as StudentSessionRow), activated: undefined };
+  }
+
+  return null;
+}
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = await createServerSupabase();
@@ -111,15 +174,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     return session;
   }
 
-  const { data: stu, error: stErr } = await supabase
-    .from("students")
-    .select(
-      "id,first_name,last_name,email,class_id,activated,auth_user_id",
-    )
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-
-  if (stErr || !stu) return null;
+  const stu = await fetchStudentRowForAuthUser(supabase, user.id);
+  if (!stu) return null;
 
   const stActivated = (
     stu as { activated?: boolean | null }

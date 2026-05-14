@@ -21,17 +21,6 @@ async function requireMessagingUser() {
   if (!user || !hasPermission(user, "SEND_MESSAGES")) {
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
-  const supabase = await db();
-  if (supabase) {
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (!prof) {
-      return { ok: false as const, error: "PROFILE_REQUIRED" as const };
-    }
-  }
   return { ok: true as const, user };
 }
 

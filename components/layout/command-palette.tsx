@@ -6,7 +6,7 @@ import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import type { SessionUser } from "@/types";
 import { buildNavItems } from "@/components/layout/nav-config";
-import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { isDirector, isStaffAdmin, isStudentUser } from "@/lib/roles";
 import { hasPermission } from "@/lib/permissions";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -95,11 +95,15 @@ export function CommandPalette({ user, open, onOpenChange }: Props) {
       labelKey: "settings" as const,
       Icon: Settings,
     },
-    {
-      href: `/profil/${user.id}`,
-      labelKey: "profile" as const,
-      Icon: UserRound,
-    },
+    ...(isStudentUser(user)
+      ? []
+      : [
+          {
+            href: `/profil/${user.id}`,
+            labelKey: "profile" as const,
+            Icon: UserRound,
+          },
+        ]),
   ];
 
   const go = (href: string) => {
