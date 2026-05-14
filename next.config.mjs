@@ -8,6 +8,11 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "50mb",
     },
+    /** Évite les vendor-chunks webpack nommés `@supabase*.js` parfois absents / corrompus en dev. */
+    serverComponentsExternalPackages: [
+      "@supabase/supabase-js",
+      "@supabase/ssr",
+    ],
   },
   transpilePackages: ["geist"],
   images: {

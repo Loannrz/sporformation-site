@@ -19,6 +19,11 @@ export type CloudFolderSortMode =
   | "name-asc"
   | "name-desc";
 
+type FolderOptionsForClass = {
+  classId: string;
+  options: { id: string; label: string }[];
+};
+
 type Props = {
   files: CloudFolderFileWithUrl[];
   locale: AppLocale;
@@ -27,6 +32,9 @@ type Props = {
   classOptions: CloudClassSelectOption[];
   studentOptions: CloudStudentUploadOption[];
   folderSlug?: string | null;
+  folderOptionsForClass?: FolderOptionsForClass;
+  /** Masquer la recherche locale (ex. vue élève). */
+  hideSearch?: boolean;
 };
 
 export function CloudFolderFileBrowser({
@@ -37,6 +45,8 @@ export function CloudFolderFileBrowser({
   classOptions,
   studentOptions,
   folderSlug = null,
+  folderOptionsForClass,
+  hideSearch = false,
 }: Props) {
   const t = useTranslations("cloud");
   const [query, setQuery] = useState("");
@@ -76,21 +86,28 @@ export function CloudFolderFileBrowser({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
-        <div className="relative w-full lg:max-w-sm">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            type="search"
-            className="pl-9"
-            placeholder={t("folderSearchPlaceholder")}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            autoComplete="off"
-          />
-        </div>
+      <div
+        className={cn(
+          "flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-4",
+          hideSearch && "lg:justify-end",
+        )}
+      >
+        {!hideSearch ? (
+          <div className="relative w-full lg:max-w-sm">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              type="search"
+              className="pl-9"
+              placeholder={t("folderSearchPlaceholder")}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        ) : null}
         <div
           className="flex flex-wrap gap-2"
           role="toolbar"
@@ -184,6 +201,7 @@ export function CloudFolderFileBrowser({
           classOptions={classOptions}
           studentOptions={studentOptions}
           folderSlug={folderSlug}
+          folderOptionsForClass={folderOptionsForClass}
         />
       )}
     </div>

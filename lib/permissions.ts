@@ -57,6 +57,9 @@ const professorAllows: Partial<Record<PermissionKey, true>> = {
 
 export function hasPermission(user: SessionUser | null, key: PermissionKey) {
   if (!user) return false;
+  if (user.role === "ELEVE") {
+    return key === "ACCESS_STUDENT_CLOUD" || key === "SEND_MESSAGES";
+  }
   if (user.role === "DIRECTEUR") return directorAllows[key] === true;
   if (user.role === "ADMINISTRATEUR") return administratorAllows[key] === true;
   if (user.role === "PROF_PRINCIPAL") return principalAllows[key] === true;

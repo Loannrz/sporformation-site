@@ -2,62 +2,112 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MOCK_CONVERSATIONS, allStaff } from "@/lib/mock-data";
 import type { AppLocale } from "@/i18n/routing";
 import { formatDistanceToNow } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
+import { getSessionUser } from "@/lib/session-server";
+import { redirect } from "@/i18n/navigation";
+import { hasPermission } from "@/lib/permissions";
+import {
+  fetchMessagingConversationsList,
+  fetchMessagingDirectoryPeople,
+} from "@/lib/data/messaging";
+import { MessagingNewDiscussionButton } from "@/components/messaging/messaging-new-discussion-button";
 
 export default async function MessagingIndexPage({
   params,
 }: {
   params: { locale: AppLocale };
 }) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) {
+    redirect({ href: "/dashboard", locale: params.locale });
+    throw new Error("Unreachable");
+  }
+  if (!hasPermission(sessionUser, "SEND_MESSAGES")) {
+    redirect({ href: "/dashboard", locale: params.locale });
+    throw new Error("Unreachable");
+  }
+  const user = sessionUser;
+
   const t = await getTranslations({
     locale: params.locale,
     namespace: "messaging",
   });
   const dfLocale = params.locale === "fr" ? fr : enUS;
+  const loc = params.locale === "fr" ? "fr" : "en";
+
+  const [conversations, directory] = await Promise.all([
+    fetchMessagingConversationsList(user.id, loc),
+    fetchMessagingDirectoryPeople(user.id, loc),
+  ]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("subtitle")}</p>
-      </div>
-      <ScrollArea className="h-[640px] rounded-2xl border border-border bg-card/60">
-        <div className="divide-y divide-border">
-          {MOCK_CONVERSATIONS.map((c) => (
-            <Link
-              key={c.id}
-              href={`/messagerie/${c.id}`}
-              className="block px-5 py-4 transition hover:bg-muted/40"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">
-                    {c.isGroup
-                      ? c.name
-                      : "Conversation directe"}
-                  </p>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">
-                    {c.lastMessageSnippet}
-                  </p>
-                </div>
-                <Badge variant="secondary" className="whitespace-nowrap">
-                  {formatDistanceToNow(new Date(c.updatedAt), {
-                    addSuffix: true,
-                    locale: dfLocale,
-                  })}
-                </Badge>
-              </div>
-            </Link>
-          ))}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1>
+          <p className="max-w-xl text-base text-muted-foreground">
+            {t("subtitle")}
+          </p>
         </div>
+        <MessagingNewDiscussionButton locale={params.locale} directory={directory} />
+      </div>
+
+      <ScrollArea className="h-[min(640px,70vh)] rounded-2xl border-2 border-border bg-card shadow-sm">
+        <ul className="divide-y divide-border">
+          {conversations.length === 0 ? (
+            <li className="px-5 py-16 text-center text-muted-foreground">
+              <p className="text-base font-medium text-foreground">
+                {t("inboxEmptyTitle")}
+              </p>
+              <p className="mt-2 text-sm">{t("inboxEmptyHint")}</p>
+            </li>
+          ) : (
+            conversations.map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/messagerie/${c.id}`}
+                  className="flex items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-semibold leading-tight">
+                        {c.title}
+                      </p>
+                      {c.unreadCount > 0 ? (
+                        <Badge
+                          variant="default"
+                          className="h-6 min-w-6 justify-center rounded-full px-2 text-xs font-bold"
+                          aria-label={t("unreadCountAria", {
+                            count: c.unreadCount,
+                          })}
+                        >
+                          {c.unreadCount > 9 ? "9+" : c.unreadCount}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="line-clamp-2 text-sm text-muted-foreground">
+                      {c.lastMessageSnippet ?? t("noMessagesYet")}
+                    </p>
+                  </div>
+                  <time
+                    className="shrink-0 text-xs text-muted-foreground"
+                    dateTime={c.lastMessageAt ?? undefined}
+                  >
+                    {c.lastMessageAt
+                      ? formatDistanceToNow(new Date(c.lastMessageAt), {
+                          addSuffix: true,
+                          locale: dfLocale,
+                        })
+                      : "—"}
+                  </time>
+                </Link>
+              </li>
+            ))
+          )}
+        </ul>
       </ScrollArea>
-      <p className="text-xs text-muted-foreground">{t("unreadDigest")}</p>
-      <p className="text-xs text-muted-foreground">
-        {allStaff.length} collaborateurs indexés (démo).
-      </p>
     </div>
   );
 }

@@ -6,11 +6,17 @@ import { Button } from "@/components/ui/button";
 import type { CloudFolderFileWithUrl, CloudStudentUploadOption } from "@/lib/data/school";
 import type { AppLocale } from "@/i18n/routing";
 import type { CloudClassSelectOption } from "./cloud-upload-document-button";
+import { CloudDocumentAudienceBadge } from "@/components/cloud/cloud-audience-ui";
 import { CloudEditDocumentButton } from "./cloud-edit-document-button";
 
 function isImageMime(mime: string | null): boolean {
   return Boolean(mime?.toLowerCase().startsWith("image/"));
 }
+
+type FolderOptionsForClass = {
+  classId: string;
+  options: { id: string; label: string }[];
+};
 
 type Props = {
   files: CloudFolderFileWithUrl[];
@@ -20,6 +26,7 @@ type Props = {
   classOptions: CloudClassSelectOption[];
   studentOptions: CloudStudentUploadOption[];
   folderSlug?: string | null;
+  folderOptionsForClass?: FolderOptionsForClass;
 };
 
 export function CloudFolderFileGrid({
@@ -30,6 +37,7 @@ export function CloudFolderFileGrid({
   classOptions,
   studentOptions,
   folderSlug = null,
+  folderOptionsForClass,
 }: Props) {
   const t = useTranslations("cloud");
 
@@ -65,9 +73,12 @@ export function CloudFolderFileGrid({
               )}
             </div>
             <div className="flex flex-1 flex-col gap-2 p-3">
-              <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
-                {f.title}
-              </p>
+              <div className="flex flex-wrap items-start gap-1.5 gap-y-1">
+                <CloudDocumentAudienceBadge audience={f.cloudAudience} />
+                <p className="line-clamp-2 min-w-0 flex-1 text-sm font-medium leading-snug text-foreground">
+                  {f.title}
+                </p>
+              </div>
               <p className="text-xs text-muted-foreground">
                 {t("folderFileVersion", { version: f.version })}
               </p>
@@ -106,10 +117,13 @@ export function CloudFolderFileGrid({
                           description: f.description,
                           classId: f.classId,
                           studentId: f.studentId,
+                          classFolderId: f.classFolderId,
+                          cloudAudience: f.cloudAudience,
                         }}
                         classOptions={classOptions}
                         studentOptions={studentOptions}
                         folderSlug={folderSlug}
+                        folderOptionsForClass={folderOptionsForClass}
                         compact
                       />
                     ) : null}
@@ -143,10 +157,13 @@ export function CloudFolderFileGrid({
                           description: f.description,
                           classId: f.classId,
                           studentId: f.studentId,
+                          classFolderId: f.classFolderId,
+                          cloudAudience: f.cloudAudience,
                         }}
                         classOptions={classOptions}
                         studentOptions={studentOptions}
                         folderSlug={folderSlug}
+                        folderOptionsForClass={folderOptionsForClass}
                         compact
                       />
                     ) : null}

@@ -4,7 +4,7 @@ import {
   deleteClassAction,
   updateClassAction,
 } from "@/app/actions/classes-admin";
-import type { ClassAdminDetail, ClassPrincipalOption } from "@/lib/data/school";
+import type { ClassAdminDetail } from "@/lib/data/school";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,20 +25,26 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useState, useTransition, useEffect, useMemo, type FormEvent } from "react";
+import { Users, CalendarRange } from "lucide-react";
 
 const CLASS_YEAR_MIN = 2015;
 const CLASS_YEAR_MAX = 2045;
 
+function initials(firstName: string, lastName: string) {
+  const a = firstName.trim()[0] ?? "";
+  const b = lastName.trim()[0] ?? "";
+  const pair = `${a}${b}`.toUpperCase();
+  return pair || "?";
+}
+
 type Props = {
   locale: AppLocale;
   initial: ClassAdminDetail;
-  principalOptions: ClassPrincipalOption[];
 };
 
 export function ClassAdminDetailForm({
   locale,
   initial,
-  principalOptions,
 }: Props) {
   const router = useRouter();
   const t = useTranslations("admin.classManage");
@@ -53,9 +59,6 @@ export function ClassAdminDetailForm({
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description ?? "");
-  const [principalId, setPrincipalId] = useState<string | null>(
-    initial.principalId,
-  );
   const [yearStart, setYearStart] = useState(
     initial.academicYearStart ?? 2026,
   );
@@ -65,14 +68,12 @@ export function ClassAdminDetailForm({
   useEffect(() => {
     setName(initial.name);
     setDescription(initial.description ?? "");
-    setPrincipalId(initial.principalId);
     setYearStart(initial.academicYearStart ?? 2026);
     setYearEnd(initial.academicYearEnd ?? 2028);
   }, [
     initial.id,
     initial.name,
     initial.description,
-    initial.principalId,
     initial.academicYearStart,
     initial.academicYearEnd,
   ]);
@@ -101,7 +102,6 @@ export function ClassAdminDetailForm({
       const res = await updateClassAction(locale, initial.id, {
         name,
         description: description.trim() || null,
-        principalId: principalId || null,
         academicYearStart: yearStart,
         academicYearEnd: yearEnd,
       });
@@ -133,107 +133,131 @@ export function ClassAdminDetailForm({
 
   return (
     <div className="space-y-8">
-      <form onSubmit={onSave} className="space-y-6">
-        <div className="grid gap-4 sm:max-w-xl">
-          <div className="space-y-2">
-            <Label htmlFor="cl-name">{t("nameLabel")} *</Label>
-            <Input
-              id="cl-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="cl-desc">{t("descLabel")}</Label>
-            <Textarea
-              id="cl-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t("descPlaceholder")}
-              rows={4}
-              className="resize-none"
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+      <form onSubmit={onSave} className="space-y-10">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] xl:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
+          <div className="flex min-h-0 flex-col gap-6">
             <div className="space-y-2">
-              <Label htmlFor="cl-y0">{t("academicYearStartLabel")}</Label>
-              <select
-                id="cl-y0"
-                value={yearStart}
-                onChange={(e) => setYearStart(Number(e.target.value))}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {yearChoices.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+              <Label htmlFor="cl-name">{t("nameLabel")} *</Label>
+              <Input
+                id="cl-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                className="h-11 bg-background text-base"
+              />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="cl-y1">{t("academicYearEndLabel")}</Label>
-              <select
-                id="cl-y1"
-                value={yearEnd}
-                onChange={(e) => setYearEnd(Number(e.target.value))}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {yearChoices.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <Label htmlFor="cl-desc">{t("descLabel")}</Label>
+              <Textarea
+                id="cl-desc"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t("descPlaceholder")}
+                rows={6}
+                className="min-h-[168px] flex-1 resize-y bg-background lg:min-h-[220px]"
+              />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">{t("academicYearHelp")}</p>
-          <div className="space-y-2">
-            <Label htmlFor="cl-pp">{t("principalLabel")}</Label>
-            <select
-              id="cl-pp"
-              value={principalId ?? ""}
-              onChange={(e) =>
-                setPrincipalId(e.target.value ? e.target.value : null)
-              }
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">{t("principalNone")}</option>
-              {principalOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.firstName} {p.lastName}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">{t("principalHelp")}</p>
-          </div>
+
+          <aside className="flex flex-col gap-5 rounded-2xl border border-border/70 bg-gradient-to-br from-muted/35 via-muted/15 to-transparent p-5 shadow-sm dark:from-muted/25 dark:via-muted/10 dark:to-transparent sm:p-6">
+            <div className="flex items-start gap-3">
+              <div
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary ring-1 ring-primary/15 dark:bg-primary/20"
+                aria-hidden
+              >
+                <CalendarRange className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="cl-y0">{t("academicYearStartLabel")}</Label>
+                    <select
+                      id="cl-y0"
+                      value={yearStart}
+                      onChange={(e) => setYearStart(Number(e.target.value))}
+                      className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      {yearChoices.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cl-y1">{t("academicYearEndLabel")}</Label>
+                    <select
+                      id="cl-y1"
+                      value={yearEnd}
+                      onChange={(e) => setYearEnd(Number(e.target.value))}
+                      className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      {yearChoices.map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t("academicYearHelp")}
+                </p>
+              </div>
+            </div>
+          </aside>
         </div>
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <Button type="submit" disabled={pending}>
-          {pending ? t("saving") : t("save")}
-        </Button>
+
+        <div
+          className={`flex flex-col gap-4 border-t border-border/60 pt-8 sm:flex-row sm:items-center ${error ? "sm:justify-between" : "sm:justify-end"}`}
+        >
+          {error ? (
+            <p className="text-sm text-destructive sm:max-w-xl lg:max-w-2xl" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <Button
+            type="submit"
+            disabled={pending}
+            size="lg"
+            className="w-full sm:w-auto sm:min-w-[11rem]"
+          >
+            {pending ? t("saving") : t("save")}
+          </Button>
+        </div>
       </form>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{t("studentsTitle")}</h2>
+      <section className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+        <div className="flex items-center gap-2 border-b border-border/60 bg-muted/35 px-5 py-3.5 dark:bg-muted/15">
+          <Users className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          <h2 className="text-base font-semibold">{t("studentsTitle")}</h2>
+        </div>
         {initial.students.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("noStudents")}</p>
+          <p className="px-5 py-8 text-center text-sm text-muted-foreground">
+            {t("noStudents")}
+          </p>
         ) : (
-          <ul className="divide-y rounded-lg border border-border">
+          <ul className="divide-y divide-border/60">
             {initial.students.map((s) => (
               <li key={s.id}>
                 <Link
                   href={`/etudiants/${s.id}`}
-                  className="flex items-center justify-between px-4 py-3 text-sm transition hover:bg-muted/50"
+                  className="group flex items-center justify-between gap-3 px-4 py-3.5 text-sm transition-colors hover:bg-muted/45 sm:px-5"
                 >
-                  <span>
-                    {s.firstName} {s.lastName}
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/12 text-[11px] font-semibold uppercase text-primary ring-1 ring-primary/15 dark:bg-primary/20"
+                      aria-hidden
+                    >
+                      {initials(s.firstName, s.lastName)}
+                    </span>
+                    <span className="truncate font-medium">
+                      {s.firstName} {s.lastName}
+                    </span>
                   </span>
-                  <span className="text-primary">{t("openStudent")} →</span>
+                  <span className="shrink-0 text-xs font-medium text-primary opacity-90 transition group-hover:opacity-100">
+                    {t("openStudent")}
+                  </span>
                 </Link>
               </li>
             ))}
@@ -241,7 +265,7 @@ export function ClassAdminDetailForm({
         )}
       </section>
 
-      <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+      <section className="rounded-2xl border border-destructive/35 bg-gradient-to-br from-destructive/[0.06] to-transparent p-5 shadow-sm dark:from-destructive/10">
         <h2 className="text-lg font-semibold text-destructive">
           {t("deleteClass")}
         </h2>

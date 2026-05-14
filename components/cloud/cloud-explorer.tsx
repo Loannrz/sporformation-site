@@ -2,10 +2,9 @@
 
 import { Files, GraduationCap, Search, User, Users } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -24,6 +23,10 @@ type Props = {
   locale: AppLocale;
   viewerId: string;
   viewerIsDirector: boolean;
+  /** Masquer la recherche globale (enseignants dans leur périmètre). */
+  hideExplorerSearch?: boolean;
+  /** Onglet « par professeur » : réservé à la direction / administration. */
+  showTeacherExplorerTab?: boolean;
   classOptions: CloudClassSelectOption[];
   studentOptions: CloudStudentUploadOption[];
   classFolders: CloudExplorerClassFolder[];
@@ -32,19 +35,19 @@ type Props = {
   allDocuments: CloudExplorerFileWithUrl[];
 };
 
-type ClassTimeFilter = "all" | "current" | "past";
-
 function matchesQuery(text: string, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   return text.toLowerCase().includes(q);
 }
 
-/** Explorateur Cloud : recherche, filtres cycle classe, cartes. */
+/** Explorateur Cloud : recherche et cartes par onglet. */
 export function CloudExplorer({
   locale,
   viewerId,
   viewerIsDirector,
+  hideExplorerSearch = false,
+  showTeacherExplorerTab = true,
   classOptions,
   studentOptions,
   classFolders,
@@ -55,16 +58,10 @@ export function CloudExplorer({
   const t = useTranslations("cloud");
   const [tab, setTab] = useState("class");
   const [query, setQuery] = useState("");
-  const [classTimeFilter, setClassTimeFilter] = useState<ClassTimeFilter>("all");
 
   const filteredClasses = useMemo(() => {
-    return classFolders.filter((c) => {
-      if (!matchesQuery(c.displayLabel, query)) return false;
-      if (classTimeFilter === "current") return !c.isPastCycle;
-      if (classTimeFilter === "past") return c.isPastCycle;
-      return true;
-    });
-  }, [classFolders, query, classTimeFilter]);
+    return classFolders.filter((c) => matchesQuery(c.displayLabel, query));
+  }, [classFolders, query]);
 
   const filteredTeachers = useMemo(() => {
     return teacherFolders.filter((p) => matchesQuery(p.displayName, query));
@@ -99,6 +96,12 @@ export function CloudExplorer({
         ? t("explorerNoSearchResults")
         : null;
 
+  useEffect(() => {
+    if (!showTeacherExplorerTab && tab === "teacher") {
+      setTab("class");
+    }
+  }, [showTeacherExplorerTab, tab]);
+
   return (
     <div
       className={cn(
@@ -107,34 +110,43 @@ export function CloudExplorer({
         "sm:p-7",
       )}
     >
-      <div className="mb-6 space-y-2">
-        <label className="sr-only" htmlFor="cloud-explorer-search">
-          {t("explorerSearchLabel")}
-        </label>
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            id="cloud-explorer-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={
-              tab === "all"
-                ? t("explorerSearchPlaceholderDocs")
-                : t("explorerSearchPlaceholder")
-            }
-            autoComplete="off"
-            className="h-11 rounded-xl border-border/70 bg-background/90 pl-10 shadow-sm backdrop-blur-sm transition focus-visible:ring-foreground/20"
-          />
+      {!hideExplorerSearch ? (
+        <div className="mb-6 space-y-2">
+          <label className="sr-only" htmlFor="cloud-explorer-search">
+            {t("explorerSearchLabel")}
+          </label>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              id="cloud-explorer-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={
+                tab === "all"
+                  ? t("explorerSearchPlaceholderDocs")
+                  : t("explorerSearchPlaceholder")
+              }
+              autoComplete="off"
+              className="h-11 rounded-xl border-border/70 bg-background/90 pl-10 shadow-sm backdrop-blur-sm transition focus-visible:ring-foreground/20"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">{t("explorerSearchHint")}</p>
         </div>
-        <p className="text-xs text-muted-foreground">{t("explorerSearchHint")}</p>
-      </div>
+      ) : null}
 
       <Tabs value={tab} onValueChange={setTab} className="w-full space-y-6">
-        <TabsList className="grid h-auto min-h-11 w-full grid-cols-2 gap-1 rounded-xl bg-muted/70 p-1.5 dark:bg-muted/50 sm:grid-cols-4 sm:min-h-12">
+        <TabsList
+          className={cn(
+            "grid h-auto min-h-11 w-full gap-1 rounded-xl bg-muted/70 p-1.5 dark:bg-muted/50 sm:min-h-12",
+            showTeacherExplorerTab
+              ? "grid-cols-2 sm:grid-cols-4"
+              : "grid-cols-2 sm:grid-cols-3",
+          )}
+        >
           <TabsTrigger
             value="class"
             className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
@@ -142,13 +154,15 @@ export function CloudExplorer({
             <GraduationCap className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
             <span className="truncate">{t("tabsClass")}</span>
           </TabsTrigger>
-          <TabsTrigger
-            value="teacher"
-            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
-          >
-            <User className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
-            <span className="truncate">{t("tabsTeacher")}</span>
-          </TabsTrigger>
+          {showTeacherExplorerTab ? (
+            <TabsTrigger
+              value="teacher"
+              className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
+            >
+              <User className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
+              <span className="truncate">{t("tabsTeacher")}</span>
+            </TabsTrigger>
+          ) : null}
           <TabsTrigger
             value="student"
             className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:bg-card data-[state=active]:shadow-sm sm:gap-2 sm:text-sm"
@@ -166,57 +180,6 @@ export function CloudExplorer({
         </TabsList>
 
         <TabsContent value="class" className="mt-0 space-y-5 focus-visible:outline-none">
-          <div
-            className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2"
-            role="group"
-            aria-label={t("explorerClassFilterGroupLabel")}
-          >
-            <span className="text-xs font-medium text-muted-foreground sm:mr-1">
-              {t("explorerClassFilterHeading")}
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={classTimeFilter === "all" ? "secondary" : "outline"}
-                className={cn(
-                  "rounded-full text-xs font-medium",
-                  classTimeFilter === "all" &&
-                    "border-foreground/15 bg-muted/90 shadow-sm dark:bg-muted",
-                )}
-                onClick={() => setClassTimeFilter("all")}
-              >
-                {t("explorerClassFilterAll")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={classTimeFilter === "current" ? "secondary" : "outline"}
-                className={cn(
-                  "rounded-full text-xs font-medium",
-                  classTimeFilter === "current" &&
-                    "border-foreground/15 bg-muted/90 shadow-sm dark:bg-muted",
-                )}
-                onClick={() => setClassTimeFilter("current")}
-              >
-                {t("explorerClassFilterCurrent")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={classTimeFilter === "past" ? "secondary" : "outline"}
-                className={cn(
-                  "rounded-full text-xs font-medium",
-                  classTimeFilter === "past" &&
-                    "border-foreground/15 bg-muted/90 shadow-sm dark:bg-muted",
-                )}
-                onClick={() => setClassTimeFilter("past")}
-              >
-                {t("explorerClassFilterPast")}
-              </Button>
-            </div>
-          </div>
-
           {classEmpty ? (
             <EmptyExplorerHint>{classEmpty}</EmptyExplorerHint>
           ) : (
@@ -231,6 +194,7 @@ export function CloudExplorer({
                   href={`/cloud/${encodeURIComponent(`classe-${c.id}`)}`}
                   subtitle={t("folderLeadershipBlurb")}
                   meta=""
+                  emphasizePrincipal={Boolean(c.isPrincipalClass)}
                   pastCycle={c.isPastCycle}
                 />
               ))}
@@ -238,27 +202,29 @@ export function CloudExplorer({
           )}
         </TabsContent>
 
-        <TabsContent value="teacher" className="mt-0 focus-visible:outline-none">
-          {teacherEmpty ? (
-            <EmptyExplorerHint>{teacherEmpty}</EmptyExplorerHint>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredTeachers.map((p) => (
-                <ExplorerCard
-                  key={p.id}
-                  kind="teacher"
-                  label={p.displayName}
-                  secondaryLine={null}
-                  documentCount={p.documentCount}
-                  href={`/cloud/${encodeURIComponent(`prof-${p.id}`)}`}
-                  subtitle={t("folderLeadershipBlurb")}
-                  meta=""
-                  pastCycle={false}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
+        {showTeacherExplorerTab ? (
+          <TabsContent value="teacher" className="mt-0 focus-visible:outline-none">
+            {teacherEmpty ? (
+              <EmptyExplorerHint>{teacherEmpty}</EmptyExplorerHint>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredTeachers.map((p) => (
+                  <ExplorerCard
+                    key={p.id}
+                    kind="teacher"
+                    label={p.displayName}
+                    secondaryLine={null}
+                    documentCount={p.documentCount}
+                    href={`/cloud/${encodeURIComponent(`prof-${p.id}`)}`}
+                    subtitle={t("folderLeadershipBlurb")}
+                    meta=""
+                    pastCycle={false}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="student" className="mt-0 focus-visible:outline-none">
           {studentEmpty ? (
@@ -315,6 +281,7 @@ function ExplorerCard({
   href,
   meta,
   pastCycle,
+  emphasizePrincipal = false,
 }: {
   kind: "class" | "teacher" | "student";
   label: string;
@@ -324,6 +291,7 @@ function ExplorerCard({
   href: string;
   meta: string;
   pastCycle: boolean;
+  emphasizePrincipal?: boolean;
 }) {
   const t = useTranslations("cloud");
   const Icon = kind === "class" ? GraduationCap : kind === "teacher" ? User : Users;
@@ -337,8 +305,11 @@ function ExplorerCard({
   return (
     <div
       className={cn(
-        "group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/90 shadow-md ring-0 transition",
-        "hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-lg dark:bg-card/80 dark:hover:border-foreground/25",
+        "group flex flex-col overflow-hidden rounded-2xl border bg-card/90 shadow-md ring-0 transition",
+        "hover:-translate-y-0.5 hover:shadow-lg dark:bg-card/80",
+        emphasizePrincipal && kind === "class"
+          ? "border-red-600/55 ring-2 ring-red-600/75 hover:border-red-700/55 dark:border-red-500/45 dark:ring-red-500/65 dark:hover:border-red-400/50"
+          : "border-border/70 hover:border-foreground/20 dark:hover:border-foreground/25",
       )}
     >
       <div className="flex items-start justify-between gap-3 p-4 pb-2">

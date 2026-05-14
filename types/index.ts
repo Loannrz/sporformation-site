@@ -3,7 +3,8 @@ export type UserRole =
   | "DIRECTEUR"
   | "ADMINISTRATEUR"
   | "PROF_PRINCIPAL"
-  | "PROFESSEUR";
+  | "PROFESSEUR"
+  | "ELEVE";
 
 /** Statut d’affectation (fiche enseignant). */
 export type TeacherEmploymentStatus =
@@ -22,9 +23,15 @@ export interface SessionUser {
   subjects?: string[];
   joinedAt?: string;
   principalClassIds?: string[];
-  /** Compte créé par la direction : l’utilisateur doit choisir un mot de passe après première connexion (OTP). */
+  /** Classes où le professeur est affecté en enseignement (hors titularisations PP). */
+  assignedClassIds?: string[];
+  /** Anciens comptes : premier mot de passe imposé après OTP ; nouveaux flux : inscription « Créer mon compte ». */
   mustSetPassword?: boolean;
   teacherEmploymentStatus?: TeacherEmploymentStatus;
+  /** Si `role === "ELEVE"` : ligne `students` liée au compte (auth.users). */
+  studentId?: string | null;
+  /** Classe de l'élève (accès Cloud restreint). */
+  studentClassId?: string | null;
 }
 
 export interface SchoolClass {
@@ -161,7 +168,8 @@ export type PermissionKey =
   | "CREATE_ANNOUNCEMENTS"
   | "VIEW_DIRECTOR_DASHBOARD"
   | "MANAGE_CALENDAR"
-  | "VIEW_CALENDAR";
+  | "VIEW_CALENDAR"
+  | "ACCESS_STUDENT_CLOUD";
 
 export interface CustomSchoolRole {
   id: string;

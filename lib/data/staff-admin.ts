@@ -9,6 +9,15 @@ import {
 import { profileRoleToUserRole } from "@/lib/roles";
 import type { TeacherEmploymentStatus, UserRole } from "@/types";
 
+const PROFILE_SELECT_ADMIN_EXTENDED =
+  "first_name,last_name,email,avatar_url,bio,joined_at,base_role,principal_class_ids,assigned_class_ids,subjects" as const;
+
+const ADMIN_LIST_WITH_ONBOARDING_EXT =
+  `id,email,${PROFILE_SELECT_ADMIN_EXTENDED},${PROFILE_SELECT_ESTABLISHMENT},${PROFILE_SELECT_ONBOARDING}` as const;
+const ADMIN_LIST_MID_EXT =
+  `id,email,${PROFILE_SELECT_ADMIN_EXTENDED},${PROFILE_SELECT_ESTABLISHMENT}` as const;
+const ADMIN_LIST_CORE_EXT = `id,email,${PROFILE_SELECT_ADMIN_EXTENDED}` as const;
+
 const ADMIN_LIST_WITH_ONBOARDING =
   `id,email,${PROFILE_SELECT_CORE},${PROFILE_SELECT_ESTABLISHMENT},${PROFILE_SELECT_ONBOARDING}` as const;
 const ADMIN_LIST_MID =
@@ -26,6 +35,8 @@ export type StaffAdminRow = {
   subjects: string[] | null;
   joinedAt: string | null;
   principalClassIds: string[] | null;
+  /** Classes où le professeur intervient (rôle PROFESSEUR uniquement en base). */
+  assignedClassIds: string[];
   activeAtEstablishment: boolean;
   leftEstablishmentOn: string | null;
   mustSetPassword: boolean;
@@ -43,6 +54,7 @@ function mapStaffRow(row: {
   subjects: string[] | null;
   joined_at: string | null;
   principal_class_ids: string[] | null;
+  assigned_class_ids?: string[] | null;
   active_at_establishment?: boolean | null;
   left_establishment_on?: string | null;
   must_set_password?: boolean | null;
@@ -59,6 +71,9 @@ function mapStaffRow(row: {
     subjects: row.subjects,
     joinedAt: row.joined_at,
     principalClassIds: row.principal_class_ids,
+    assignedClassIds: Array.isArray(row.assigned_class_ids)
+      ? row.assigned_class_ids
+      : [],
     activeAtEstablishment: row.active_at_establishment !== false,
     leftEstablishmentOn: row.left_establishment_on ?? null,
     mustSetPassword: row.must_set_password === true,
@@ -67,6 +82,14 @@ function mapStaffRow(row: {
 }
 
 async function selectAllStaff(supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabase>>>) {
+  const r0 = await supabase
+    .from("profiles")
+    .select(ADMIN_LIST_WITH_ONBOARDING_EXT)
+    .order("last_name", { ascending: true });
+
+  if (!r0.error) return r0;
+  if (!isMissingProfileColumnError(r0.error)) return r0;
+
   const r1 = await supabase
     .from("profiles")
     .select(ADMIN_LIST_WITH_ONBOARDING)
@@ -93,6 +116,15 @@ async function selectStaffById(
   supabase: NonNullable<Awaited<ReturnType<typeof createServerSupabase>>>,
   id: string,
 ) {
+  const r0 = await supabase
+    .from("profiles")
+    .select(ADMIN_LIST_WITH_ONBOARDING_EXT)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!r0.error) return r0;
+  if (!isMissingProfileColumnError(r0.error)) return r0;
+
   const r1 = await supabase
     .from("profiles")
     .select(ADMIN_LIST_WITH_ONBOARDING)
@@ -117,27 +149,36 @@ async function selectStaffById(
 export async function fetchAllStaffForAdmin(): Promise<StaffAdminRow[]> {
   const admin = createAdminSupabase();
   if (admin) {
-    const r1 = await admin
+    const r0 = await admin
       .from("profiles")
-      .select(ADMIN_LIST_WITH_ONBOARDING)
+      .select(ADMIN_LIST_WITH_ONBOARDING_EXT)
       .order("last_name", { ascending: true });
-    if (!r1.error && r1.data) {
-      return r1.data.map(mapStaffRow);
+    if (!r0.error && r0.data) {
+      return r0.data.map(mapStaffRow);
     }
-    if (r1.error && isMissingProfileColumnError(r1.error)) {
-      const r2 = await admin
+    if (r0.error && isMissingProfileColumnError(r0.error)) {
+      const r1 = await admin
         .from("profiles")
-        .select(ADMIN_LIST_MID)
+        .select(ADMIN_LIST_WITH_ONBOARDING)
         .order("last_name", { ascending: true });
-      if (!r2.error && r2.data) {
-        return r2.data.map(mapStaffRow);
+      if (!r1.error && r1.data) {
+        return r1.data.map(mapStaffRow);
       }
-      if (r2.error && isMissingProfileColumnError(r2.error)) {
-        const r3 = await admin
+      if (r1.error && isMissingProfileColumnError(r1.error)) {
+        const r2 = await admin
           .from("profiles")
-          .select(ADMIN_LIST_CORE)
+          .select(ADMIN_LIST_MID)
           .order("last_name", { ascending: true });
-        if (!r3.error && r3.data) return r3.data.map(mapStaffRow);
+        if (!r2.error && r2.data) {
+          return r2.data.map(mapStaffRow);
+        }
+        if (r2.error && isMissingProfileColumnError(r2.error)) {
+          const r3 = await admin
+            .from("profiles")
+            .select(ADMIN_LIST_CORE)
+            .order("last_name", { ascending: true });
+          if (!r3.error && r3.data) return r3.data.map(mapStaffRow);
+        }
       }
     }
   }
@@ -154,26 +195,34 @@ export async function fetchStaffByIdForAdmin(
 ): Promise<StaffAdminRow | null> {
   const admin = createAdminSupabase();
   if (admin) {
-    const r1 = await admin
+    const r0 = await admin
       .from("profiles")
-      .select(ADMIN_LIST_WITH_ONBOARDING)
+      .select(ADMIN_LIST_WITH_ONBOARDING_EXT)
       .eq("id", id)
       .maybeSingle();
-    if (!r1.error && r1.data) return mapStaffRow(r1.data);
-    if (r1.error && isMissingProfileColumnError(r1.error)) {
-      const r2 = await admin
+    if (!r0.error && r0.data) return mapStaffRow(r0.data);
+    if (r0.error && isMissingProfileColumnError(r0.error)) {
+      const r1 = await admin
         .from("profiles")
-        .select(ADMIN_LIST_MID)
+        .select(ADMIN_LIST_WITH_ONBOARDING)
         .eq("id", id)
         .maybeSingle();
-      if (!r2.error && r2.data) return mapStaffRow(r2.data);
-      if (r2.error && isMissingProfileColumnError(r2.error)) {
-        const r3 = await admin
+      if (!r1.error && r1.data) return mapStaffRow(r1.data);
+      if (r1.error && isMissingProfileColumnError(r1.error)) {
+        const r2 = await admin
           .from("profiles")
-          .select(ADMIN_LIST_CORE)
+          .select(ADMIN_LIST_MID)
           .eq("id", id)
           .maybeSingle();
-        if (!r3.error && r3.data) return mapStaffRow(r3.data);
+        if (!r2.error && r2.data) return mapStaffRow(r2.data);
+        if (r2.error && isMissingProfileColumnError(r2.error)) {
+          const r3 = await admin
+            .from("profiles")
+            .select(ADMIN_LIST_CORE)
+            .eq("id", id)
+            .maybeSingle();
+          if (!r3.error && r3.data) return mapStaffRow(r3.data);
+        }
       }
     }
   }

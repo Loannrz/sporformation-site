@@ -30,6 +30,7 @@ export type NavItem =
       labelKey: NavLabelKey;
       icon: LucideIcon;
       permission?: Parameters<typeof hasPermission>[1];
+      alternatePermission?: Parameters<typeof hasPermission>[1];
       staffAdminOnly?: boolean;
     }
   | {
@@ -59,6 +60,7 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
       labelKey: "cloud",
       icon: Cloud,
       permission: "UPLOAD_FILES",
+      alternatePermission: "ACCESS_STUDENT_CLOUD",
     },
     {
       kind: "link",
@@ -104,6 +106,14 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
   return items.filter((item) => {
     if (!user) return false;
     if (item.kind === "link" && item.staffAdminOnly) return isStaffAdmin(user);
+    if (item.kind === "link" && item.permission) {
+      const mainOk = hasPermission(user, item.permission);
+      const altOk =
+        item.alternatePermission !== undefined &&
+        hasPermission(user, item.alternatePermission);
+      if (!mainOk && !altOk) return false;
+      return true;
+    }
     if (item.permission) return hasPermission(user, item.permission);
     return true;
   });

@@ -36,16 +36,16 @@ export default async function AdminHubPage({
 
   const cards = [
     {
-      href: "/admin/users",
-      title: t("usersTitle"),
-      desc: t("usersDesc"),
-      Icon: Users,
-    },
-    {
       href: "/administration/classes",
       title: t("classesTitle"),
       desc: t("classesDesc"),
       Icon: School,
+    },
+    {
+      href: "/admin/users",
+      title: t("usersTitle"),
+      desc: t("usersDesc"),
+      Icon: Users,
     },
     {
       href: "/admin/students",

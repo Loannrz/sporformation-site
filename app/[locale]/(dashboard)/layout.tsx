@@ -7,6 +7,7 @@ import { getSessionUser } from "@/lib/session-server";
 import { redirect } from "@/i18n/navigation";
 import { hasPermission } from "@/lib/permissions";
 import { fetchDisciplineDialogOptions } from "@/lib/data/school";
+import { fetchTotalUnreadMessageCount } from "@/lib/data/messaging";
 
 export default async function DashboardGroupLayout({
   children,
@@ -21,8 +22,17 @@ export default async function DashboardGroupLayout({
       ? await fetchDisciplineDialogOptions()
       : null;
 
+    const messagingUnread =
+      hasPermission(user, "SEND_MESSAGES")
+        ? await fetchTotalUnreadMessageCount(user.id)
+        : 0;
+
     return (
-      <DashboardShell user={user} disciplineOptions={disciplineOptions}>
+      <DashboardShell
+        user={user}
+        disciplineOptions={disciplineOptions}
+        notificationCount={messagingUnread}
+      >
         {children}
       </DashboardShell>
     );

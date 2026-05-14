@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CloudDocumentAudienceBadge } from "@/components/cloud/cloud-audience-ui";
 import type { CloudExplorerFileWithUrl, CloudStudentUploadOption } from "@/lib/data/school";
 import type { AppLocale } from "@/i18n/routing";
 import { CloudEditDocumentButton } from "./cloud-edit-document-button";
@@ -47,6 +48,7 @@ function matchesDocSearch(f: CloudExplorerFileWithUrl, needle: string): boolean 
     f.classLabel ?? "",
     f.teacherName ?? "",
     f.studentName ?? "",
+    f.cloudAudience,
   ]
     .join("\n")
     .toLowerCase();
@@ -238,9 +240,15 @@ export function CloudExplorerAllDocuments({
                   )}
                 </div>
                 <div className="flex shrink-0 flex-col gap-1 border-t border-border/60 bg-card p-2">
-                  <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-foreground sm:text-xs">
-                    {f.title}
-                  </p>
+                  <div className="flex flex-wrap items-start gap-1 gap-y-0.5">
+                    <CloudDocumentAudienceBadge
+                      audience={f.cloudAudience}
+                      className="text-[9px]"
+                    />
+                    <p className="line-clamp-2 min-w-0 flex-1 text-[11px] font-semibold leading-snug text-foreground sm:text-xs">
+                      {f.title}
+                    </p>
+                  </div>
                   <p className="line-clamp-2 text-[10px] text-muted-foreground sm:line-clamp-3">
                     {docMetaLine(f)}
                   </p>
@@ -270,6 +278,8 @@ export function CloudExplorerAllDocuments({
                             description: f.description,
                             classId: f.classId,
                             studentId: f.studentId,
+                            classFolderId: f.classFolderId,
+                            cloudAudience: f.cloudAudience,
                           }}
                           classOptions={classOptions}
                           studentOptions={studentOptions}
@@ -296,6 +306,8 @@ export function CloudExplorerAllDocuments({
                             description: f.description,
                             classId: f.classId,
                             studentId: f.studentId,
+                            classFolderId: f.classFolderId,
+                            cloudAudience: f.cloudAudience,
                           }}
                           classOptions={classOptions}
                           studentOptions={studentOptions}
@@ -333,9 +345,12 @@ export function CloudExplorerAllDocuments({
                       )}
                     </div>
                     <div className="min-w-[140px] flex-1">
-                      <p className="font-medium leading-snug text-foreground">
-                        {f.title}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2 gap-y-1">
+                        <CloudDocumentAudienceBadge audience={f.cloudAudience} />
+                        <p className="min-w-0 flex-1 font-medium leading-snug text-foreground">
+                          {f.title}
+                        </p>
+                      </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {docMetaLine(f)}
                       </p>
@@ -370,6 +385,8 @@ export function CloudExplorerAllDocuments({
                             description: f.description,
                             classId: f.classId,
                             studentId: f.studentId,
+                            classFolderId: f.classFolderId,
+                            cloudAudience: f.cloudAudience,
                           }}
                           classOptions={classOptions}
                           studentOptions={studentOptions}

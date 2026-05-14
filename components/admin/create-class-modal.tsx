@@ -102,7 +102,7 @@ export function CreateClassModal({ locale }: Props) {
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" className="gap-2 shadow-sm">
+        <Button type="button" className="gap-2 rounded-xl px-5 shadow-md">
           <Plus className="h-4 w-4" aria-hidden />
           {t("createButton")}
         </Button>

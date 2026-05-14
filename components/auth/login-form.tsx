@@ -1,7 +1,7 @@
 "use client";
 
 import { signInWithPasswordAction } from "@/app/actions/auth";
-import { OtpLoginPanel } from "@/components/auth/otp-login-panel";
+import { TeacherSignupPanel } from "@/components/auth/teacher-signup-panel";
 import {
   initialSignInState,
   type SignInFormState,
@@ -34,7 +34,7 @@ export function LoginForm({ locale, urlErrorMessage }: Props) {
     <Tabs defaultValue="password" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="password">{t("tabPassword")}</TabsTrigger>
-        <TabsTrigger value="otp">{t("tabOtp")}</TabsTrigger>
+        <TabsTrigger value="signup">{t("tabSignup")}</TabsTrigger>
       </TabsList>
       <TabsContent value="password" className="mt-4 space-y-4 outline-none">
         <form action={formAction} className="space-y-4">
@@ -91,8 +91,8 @@ export function LoginForm({ locale, urlErrorMessage }: Props) {
           </Button>
         </form>
       </TabsContent>
-      <TabsContent value="otp" className="mt-4 outline-none">
-        <OtpLoginPanel />
+      <TabsContent value="signup" className="mt-4 outline-none">
+        <TeacherSignupPanel locale={locale} />
       </TabsContent>
     </Tabs>
   );

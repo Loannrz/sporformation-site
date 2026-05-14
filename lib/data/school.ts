@@ -2,7 +2,12 @@ import { hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import type { SessionUser } from "@/types";
+import type { CloudDocumentAudience } from "@/lib/cloud-document-audience";
+import {
+  normalizeCloudDocumentAudience,
+  viewerSeesCloudDocumentAudience,
+} from "@/lib/cloud-document-audience";
+import type { SessionUser, UserRole } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   viewerSeesAnnouncement,
@@ -18,6 +23,11 @@ import type {
   SchoolClass,
   StudentProfile,
 } from "@/types";
+import {
+  STUDENT_INBOX_FOLDER_KIND,
+  getStudentInboxFolderId as getStudentInboxFolderIdPure,
+} from "@/lib/cloud/class-cloud-folder-helpers";
+import { formatCloudClassDisplayName as formatCloudClassDisplayNamePure } from "@/lib/format-cloud-class-display-name";
 
 type ClassRowDb = {
   id: string;
@@ -331,24 +341,23 @@ export async function fetchDisciplineDialogOptions(): Promise<DisciplineDialogOp
       .select(sel)
       .order("last_name");
     if (!error && data) {
-      const students = (data as { id: string; class_id: string | null }[]).map(
-        (r) => {
-          const row = r as {
-            id: string;
-            first_name: string;
-            last_name: string;
-            class_id: string | null;
-          };
-          const cid = row.class_id;
-          return {
-            id: row.id,
-            firstName: row.first_name,
-            lastName: row.last_name,
-            classId: cid,
-            className: cid ? (nameByClassId.get(cid) ?? null) : null,
-          };
-        },
-      );
+      const students = (
+        data as unknown as {
+          id: string;
+          first_name: string;
+          last_name: string;
+          class_id: string | null;
+        }[]
+      ).map((row) => {
+        const cid = row.class_id;
+        return {
+          id: row.id,
+          firstName: row.first_name,
+          lastName: row.last_name,
+          classId: cid,
+          className: cid ? (nameByClassId.get(cid) ?? null) : null,
+        };
+      });
       return {
         classes: classRows.map((c) => ({ id: c.id, name: c.name })),
         students,
@@ -827,23 +836,7 @@ export async function fetchSanctionsForClassStudents(
   );
 }
 
-export function formatCloudClassDisplayName(
-  name: string,
-  academicYearStart: number | null,
-  academicYearEnd: number | null,
-): string {
-  const y0 = academicYearStart;
-  const y1 = academicYearEnd;
-  if (
-    y0 != null &&
-    y1 != null &&
-    Number.isFinite(y0) &&
-    Number.isFinite(y1)
-  ) {
-    return `${name} – ${y0}–${y1}`;
-  }
-  return name;
-}
+export const formatCloudClassDisplayName = formatCloudClassDisplayNamePure;
 
 /** Cycle considéré comme terminé si `academicYearEnd` &lt; année civile courante. */
 export function cloudClassIsPastCycle(academicYearEnd: number | null): boolean {
@@ -938,6 +931,8 @@ export type CloudExplorerClassFolder = {
   academicYearEnd: number | null;
   /** true si l’année de fin de cycle est strictement avant l’année civile courante. */
   isPastCycle: boolean;
+  /** Titularisation : mise en évidence visuelle pour le PP sur cette classe. */
+  isPrincipalClass?: boolean;
 };
 
 export type CloudExplorerTeacherFolder = {
@@ -961,9 +956,9 @@ export type CloudStudentUploadOption = {
   classId: string | null;
 };
 
-export async function fetchCloudStudentUploadOptions(): Promise<
-  CloudStudentUploadOption[]
-> {
+export async function fetchCloudStudentUploadOptions(opts?: {
+  restrictClassIds?: string[] | null;
+}): Promise<CloudStudentUploadOption[]> {
   const admin = createAdminSupabase();
   const supabase = admin ?? (await supabaseOrNull());
   if (!supabase) return [];
@@ -987,15 +982,32 @@ export async function fetchCloudStudentUploadOptions(): Promise<
 
   if (error || !data) return [];
 
-  return (data as { id: string; first_name: string; last_name: string; class_id: string | null }[]).map(
-    (s) => {
-      const name = `${s.first_name} ${s.last_name}`.trim() || "—";
+  const restrict =
+    opts?.restrictClassIds && opts.restrictClassIds.length > 0
+      ? new Set(opts.restrictClassIds)
+      : null;
+
+  let studs = data as {
+    id: string;
+    first_name: string;
+    last_name: string;
+    class_id: string | null;
+  }[];
+
+  if (restrict) {
+    studs = studs.filter((s) => {
       const cid = s.class_id;
-      const cl = cid ? classLabelById.get(cid) ?? null : null;
-      const label = cl ? `${name} · ${cl}` : name;
-      return { id: s.id, label, classId: cid };
-    },
-  );
+      return Boolean(cid && restrict.has(cid));
+    });
+  }
+
+  return studs.map((s) => {
+    const name = `${s.first_name} ${s.last_name}`.trim() || "—";
+    const cid = s.class_id;
+    const cl = cid ? classLabelById.get(cid) ?? null : null;
+    const label = cl ? `${name} · ${cl}` : name;
+    return { id: s.id, label, classId: cid };
+  });
 }
 
 /** Classe d’un élève (pré-sélection upload depuis un dossier élève). */
@@ -1014,9 +1026,20 @@ export async function fetchStudentClassIdForCloud(
 }
 
 /**
- * Dossiers Cloud : classes, professeurs, élèves + comptages fichiers.
+ * Dossiers Cloud : classes, professeurs, élèves + comptages fichiers
+ * visibles selon `viewerRole`.
  */
-export async function fetchCloudExplorerFolders(): Promise<{
+export async function fetchCloudExplorerFolders(
+  viewerRole: UserRole,
+  opts?: {
+    studentClassId?: string | null;
+    /** Limité aux IDs fournis : périmètre enseignant (titulaire ∪ affectations). `[]` = aucune classe. */
+    teacherScopedClassIds?: string[] | null;
+    viewerId?: string | null;
+    /** Classes où le PP est titulaire (badge / style carte). */
+    principalClassIds?: string[] | null;
+  },
+): Promise<{
   classes: CloudExplorerClassFolder[];
   teachers: CloudExplorerTeacherFolder[];
   students: CloudExplorerStudentFolder[];
@@ -1030,7 +1053,30 @@ export async function fetchCloudExplorerFolders(): Promise<{
   const supabase = admin ?? (await supabaseOrNull());
   if (!supabase) return empty;
 
-  const classRows = await loadAllClassRows(supabase);
+  const classRowsAll = await loadAllClassRows(supabase);
+
+  let classRows = classRowsAll;
+  if (viewerRole === "ELEVE") {
+    const cid = opts?.studentClassId ?? null;
+    if (!cid) return empty;
+    classRows = classRowsAll.filter((c) => c.id === cid);
+    if (!classRows.length) return empty;
+  }
+
+  const scopeRestricted =
+    viewerRole !== "ELEVE" && opts?.teacherScopedClassIds != null;
+  const scopeSet = scopeRestricted
+    ? new Set(opts!.teacherScopedClassIds!)
+    : null;
+
+  if (scopeSet) {
+    classRows = classRowsAll.filter((c) => scopeSet.has(c.id));
+  }
+
+  const principalSet =
+    opts?.principalClassIds && opts.principalClassIds.length > 0
+      ? new Set(opts.principalClassIds)
+      : null;
 
   const { data: profRows, error: profErr } = await supabase
     .from("profiles")
@@ -1045,9 +1091,42 @@ export async function fetchCloudExplorerFolders(): Promise<{
     .select("id,first_name,last_name,class_id")
     .order("last_name");
 
-  const { data: fileRows, error: filesErr } = await supabase
+  const studentClassById = new Map<string, string>();
+  if (!studErr && studRows) {
+    for (const row of studRows as {
+      id: string;
+      class_id: string | null;
+    }[]) {
+      if (row.class_id) studentClassById.set(row.id, row.class_id);
+    }
+  }
+
+  let fileRows: {
+    class_id?: string | null;
+    owner_id?: string | null;
+    student_id?: string | null;
+    cloud_audience?: string | null;
+  }[] | null = null;
+
+  let fileErr: unknown = null;
+  const fullFileSelect = await supabase
     .from("files")
-    .select("class_id,owner_id,student_id");
+    .select("class_id,owner_id,student_id,cloud_audience");
+
+  if (
+    fullFileSelect.error &&
+    String(fullFileSelect.error.message ?? "").includes("cloud_audience")
+  ) {
+    const fb = await supabase.from("files").select("class_id,owner_id,student_id");
+    fileRows = fb.data ?? null;
+    fileErr = fb.error;
+    for (const f of fileRows ?? []) {
+      f.cloud_audience = "BOTH";
+    }
+  } else {
+    fileRows = fullFileSelect.data ?? null;
+    fileErr = fullFileSelect.error;
+  }
 
   const classLabelById = new Map(
     classRows.map((c) => [
@@ -1060,11 +1139,40 @@ export async function fetchCloudExplorerFolders(): Promise<{
     ]),
   );
 
+  const viewerIdForScope = opts?.viewerId ?? null;
+
+  const fileMatchesTeacherScope = (
+    f: {
+      class_id?: string | null;
+      owner_id?: string | null;
+      student_id?: string | null | undefined;
+    },
+  ): boolean => {
+    if (!scopeSet) return true;
+    const cid = (f.class_id as string | null | undefined) ?? null;
+    if (cid && scopeSet.has(cid)) return true;
+    const sid = f.student_id as string | null | undefined;
+    if (sid) {
+      const sc = studentClassById.get(sid);
+      if (sc && scopeSet.has(sc)) return true;
+    }
+    const oid = (f.owner_id as string | null | undefined) ?? null;
+    if (!cid && oid && viewerIdForScope && oid === viewerIdForScope) return true;
+    return false;
+  };
+
   const classCounts = new Map<string, number>();
   const ownerCounts = new Map<string, number>();
   const studentCounts = new Map<string, number>();
-  if (!filesErr && fileRows) {
+  if (!fileErr && fileRows?.length) {
     for (const f of fileRows) {
+      const aud = normalizeCloudDocumentAudience(f.cloud_audience);
+      if (!viewerSeesCloudDocumentAudience(viewerRole, aud)) {
+        continue;
+      }
+      if (!fileMatchesTeacherScope(f)) {
+        continue;
+      }
       const cid = f.class_id as string | null;
       if (cid) {
         classCounts.set(cid, (classCounts.get(cid) ?? 0) + 1);
@@ -1091,10 +1199,11 @@ export async function fetchCloudExplorerFolders(): Promise<{
     academicYearStart: c.academic_year_start,
     academicYearEnd: c.academic_year_end,
     isPastCycle: cloudClassIsPastCycle(c.academic_year_end),
+    isPrincipalClass: principalSet?.has(c.id) ?? false,
   }));
 
   let teachers: CloudExplorerTeacherFolder[] = [];
-  if (!profErr && profRows) {
+  if (viewerRole !== "ELEVE" && !profErr && profRows && !scopeSet) {
     teachers = profRows.map((p) => ({
       id: p.id,
       displayName: `${p.first_name} ${p.last_name}`.trim() || "—",
@@ -1103,15 +1212,20 @@ export async function fetchCloudExplorerFolders(): Promise<{
   }
 
   let students: CloudExplorerStudentFolder[] = [];
-  if (!studErr && studRows) {
-    students = (
-      studRows as {
-        id: string;
-        first_name: string;
-        last_name: string;
-        class_id: string | null;
-      }[]
-    ).map((s) => {
+  if (viewerRole !== "ELEVE" && !studErr && studRows) {
+    let studs = studRows as {
+      id: string;
+      first_name: string;
+      last_name: string;
+      class_id: string | null;
+    }[];
+    if (scopeSet) {
+      studs = studs.filter((s) => {
+        const cid = s.class_id;
+        return Boolean(cid && scopeSet.has(cid));
+      });
+    }
+    students = studs.map((s) => {
       const cid = s.class_id;
       return {
         id: s.id,
@@ -1183,6 +1297,227 @@ export type CloudFolderSlugParsed =
   | { kind: "teacher"; id: string }
   | { kind: "student"; id: string };
 
+export type ClassCloudFolderRow = {
+  id: string;
+  classId: string;
+  parentId: string | null;
+  name: string;
+  sortOrder: number;
+  isSystem: boolean;
+  /** `STUDENT_INBOX` = racine « Documents des élèves ». */
+  systemKind: string | null;
+};
+
+/** Nœud hiérarchique (sous-dossiers cloud d’une classe). */
+export type ClassCloudFolderNode = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isSystem: boolean;
+  systemKind: string | null;
+  children: ClassCloudFolderNode[];
+};
+
+export { STUDENT_INBOX_FOLDER_KIND };
+
+export function getStudentInboxFolderId(
+  rows: ClassCloudFolderRow[],
+): string | null {
+  return getStudentInboxFolderIdPure(rows);
+}
+
+export async function ensureClassStudentInboxFolder(
+  admin: SupabaseClient,
+  classId: string,
+): Promise<void> {
+  const { data: exists } = await admin
+    .from("class_cloud_folders")
+    .select("id")
+    .eq("class_id", classId)
+    .eq("system_kind", STUDENT_INBOX_FOLDER_KIND)
+    .maybeSingle();
+  if (exists?.id) return;
+
+  await admin.from("class_cloud_folders").insert({
+    class_id: classId,
+    parent_id: null,
+    name: "Documents des élèves",
+    sort_order: -999,
+    is_system: true,
+    system_kind: STUDENT_INBOX_FOLDER_KIND,
+  });
+}
+
+export function isFolderDescendantOf(
+  rows: ClassCloudFolderRow[],
+  folderId: string,
+  ancestorId: string,
+): boolean {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  let cur: string | null = folderId;
+  for (let i = 0; i < 200 && cur; i += 1) {
+    if (cur === ancestorId) return true;
+    const row = byId.get(cur);
+    cur = row?.parentId ?? null;
+  }
+  return false;
+}
+
+/** Fichiers dans l’arbre « Documents des élèves » (y compris la racine inbox). */
+export function isClassFolderInStudentUploadTree(
+  rows: ClassCloudFolderRow[],
+  classFolderId: string | null,
+): boolean {
+  const inbox = getStudentInboxFolderId(rows);
+  if (!inbox) return false;
+  if (classFolderId === inbox) return true;
+  if (!classFolderId) return false;
+  return isFolderDescendantOf(rows, classFolderId, inbox);
+}
+
+export async function fetchClassCloudFoldersFlat(
+  classId: string,
+): Promise<ClassCloudFolderRow[]> {
+  const admin = createAdminSupabase();
+  if (admin) {
+    await ensureClassStudentInboxFolder(admin, classId);
+  }
+  const supabase = admin ?? (await supabaseOrNull());
+  if (!supabase) return [];
+  let selectFields =
+    "id,class_id,parent_id,name,sort_order,is_system,system_kind";
+  let { data, error } = await supabase
+    .from("class_cloud_folders")
+    .select(selectFields)
+    .eq("class_id", classId);
+
+  if (
+    error &&
+    (String(error.message ?? "").includes("system_kind") ||
+      String(error.message ?? "").includes("is_system"))
+  ) {
+    selectFields = "id,class_id,parent_id,name,sort_order";
+    ({ data, error } = await supabase
+      .from("class_cloud_folders")
+      .select(selectFields)
+      .eq("class_id", classId));
+  }
+
+  if (error) return [];
+  if (!data?.length) return [];
+
+  const hasMeta = selectFields.includes("system_kind");
+  type Raw = {
+    id: string;
+    class_id: string;
+    parent_id: string | null;
+    name: string;
+    sort_order: number;
+    is_system?: boolean | null;
+    system_kind?: string | null;
+  };
+
+  return (data as unknown as Raw[]).map((r) => ({
+    id: r.id,
+    classId: r.class_id,
+    parentId: r.parent_id,
+    name: r.name,
+    sortOrder: r.sort_order,
+    isSystem: hasMeta ? Boolean(r.is_system) : false,
+    systemKind: hasMeta ? (r.system_kind ?? null) : null,
+  }));
+}
+
+export function buildClassCloudFolderTree(
+  rows: ClassCloudFolderRow[],
+): ClassCloudFolderNode[] {
+  const byParent = new Map<string | null, ClassCloudFolderRow[]>();
+  for (const r of rows) {
+    const p = r.parentId;
+    const arr = byParent.get(p) ?? [];
+    arr.push(r);
+    byParent.set(p, arr);
+  }
+  for (const [, arr] of byParent) {
+    arr.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const build = (parentId: string | null): ClassCloudFolderNode[] => {
+    const list = byParent.get(parentId) ?? [];
+    return list.map((r) => ({
+      id: r.id,
+      name: r.name,
+      sortOrder: r.sortOrder,
+      isSystem: r.isSystem,
+      systemKind: r.systemKind,
+      children: build(r.id),
+    }));
+  };
+  return build(null);
+}
+
+export async function fetchClassCloudFolderTree(
+  classId: string,
+): Promise<ClassCloudFolderNode[]> {
+  const rows = await fetchClassCloudFoldersFlat(classId);
+  return buildClassCloudFolderTree(rows);
+}
+
+/** Emplacements réservés aux dépôts élèves (inbox + sous-dossiers créés par l’équipe). */
+export function flattenClassCloudStudentInboxOptions(
+  nodes: ClassCloudFolderNode[],
+  rootLabel?: string,
+): { id: string; label: string }[] {
+  const inbox = nodes.find(
+    (n) =>
+      n.systemKind === STUDENT_INBOX_FOLDER_KIND ||
+      n.name.trim() === "Documents des élèves",
+  );
+  if (!inbox) return [];
+  const out: { id: string; label: string }[] = [
+    { id: inbox.id, label: rootLabel ?? inbox.name },
+  ];
+  const walk = (list: ClassCloudFolderNode[], depth: number) => {
+    const sorted = [...list].sort((a, b) => a.sortOrder - b.sortOrder);
+    const pad = "\u2003".repeat(Math.max(0, depth));
+    for (const n of sorted) {
+      out.push({ id: n.id, label: `${pad}${n.name}` });
+      if (n.children.length) walk(n.children, depth + 1);
+    }
+  };
+  walk(inbox.children, 1);
+  return out;
+}
+
+/** Options du sélecteur « emplacement » (racine + arbre indenté). */
+export function flattenClassCloudFolderOptions(
+  nodes: ClassCloudFolderNode[],
+  rootLabel: string,
+): { id: string; label: string }[] {
+  const out: { id: string; label: string }[] = [
+    { id: "__root__", label: rootLabel },
+  ];
+  const walk = (list: ClassCloudFolderNode[], depth: number) => {
+    const sorted = [...list].sort((a, b) => a.sortOrder - b.sortOrder);
+    const pad = "\u2003".repeat(Math.max(0, depth));
+    for (const n of sorted) {
+      out.push({ id: n.id, label: `${pad}${n.name}` });
+      if (n.children.length) walk(n.children, depth + 1);
+    }
+  };
+  walk(nodes, 0);
+  return out;
+}
+
+/** Enfants directs d’un parent (`null` = racine). */
+export function filterClassCloudFoldersByParent(
+  rows: ClassCloudFolderRow[],
+  parentId: string | null,
+): ClassCloudFolderRow[] {
+  return rows
+    .filter((r) => (r.parentId ?? null) === parentId)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 export function parseCloudFolderSlug(
   dossierParam: string,
 ): CloudFolderSlugParsed | null {
@@ -1212,12 +1547,16 @@ export type CloudFolderFileRow = {
   mime: string | null;
   createdAt: string;
   version: number;
+  /** Classé pour élèves, équipe seule ou les deux. */
+  cloudAudience: CloudDocumentAudience;
   /** Classe associée au fichier (nullable). */
   classId: string | null;
   /** Professeur ou auteur du dépôt (auth user id). */
   ownerId: string | null;
   /** Élève associé au fichier (nullable). */
   studentId: string | null;
+  /** Sous-dossier classe (`null` = racine de l’espace classe). */
+  classFolderId: string | null;
   /** Chemin dans le bucket `documents` pour la version affichée. */
   storagePath: string | null;
 };
@@ -1225,8 +1564,6 @@ export type CloudFolderFileRow = {
 export type CloudFolderFileWithUrl = CloudFolderFileRow & {
   signedUrl: string | null;
 };
-
-/** Métadonnées classe / professeur / élève pour la vue « tous les documents » du Cloud. */
 export type CloudExplorerFileRow = CloudFolderFileRow & {
   /** Libellé classe formaté ; null si aucune classe liée. */
   classLabel: string | null;
@@ -1244,13 +1581,12 @@ export type CloudExplorerFileWithUrl = CloudExplorerFileRow & {
 export async function fetchCloudFolderFiles(
   kind: "class" | "teacher" | "student",
   entityId: string,
+  opts?: { classFolderId?: string | null; viewerRole?: UserRole },
 ): Promise<CloudFolderFileRow[]> {
   const admin = createAdminSupabase();
   const supabase = admin ?? (await supabaseOrNull());
   if (!supabase) return [];
 
-  const fullSelect =
-    "id,title,description,logical_key,mime,created_at,class_id,owner_id,student_id";
   const legacySelect =
     "id,logical_key,mime,created_at,class_id,owner_id";
 
@@ -1261,17 +1597,46 @@ export async function fetchCloudFolderFiles(
         ? "owner_id"
         : "student_id";
 
-  const run = (sel: string) =>
-    supabase.from("files").select(sel).eq(col, entityId).order("created_at", {
-      ascending: false,
-    });
+  const classFolderTarget =
+    kind === "class" ? (opts?.classFolderId ?? null) : undefined;
 
-  let res = await run(fullSelect);
+  const buildQuery = (sel: string, applyFolder: boolean) => {
+    let q = supabase.from("files").select(sel).eq(col, entityId);
+    if (applyFolder && kind === "class" && classFolderTarget !== undefined) {
+      if (classFolderTarget) {
+        q = q.eq("class_folder_id", classFolderTarget);
+      } else {
+        q = q.is("class_folder_id", null);
+      }
+    }
+    return q.order("created_at", { ascending: false });
+  };
+
+  let folderFilterActive = kind === "class";
+  let selectFields =
+    "id,title,description,logical_key,mime,created_at,class_id,owner_id,student_id,class_folder_id,cloud_audience";
+
+  let res = await buildQuery(selectFields, folderFilterActive);
+
+  if (res.error && String(res.error.message ?? "").includes("cloud_audience")) {
+    selectFields = selectFields.replace(/,cloud_audience\b/, "");
+    res = await buildQuery(selectFields, folderFilterActive);
+  }
+
   if (res.error) {
     if (kind === "student") {
       return [];
     }
-    res = await run(legacySelect);
+    const msg = String(res.error.message ?? "");
+    if (kind === "class" && msg.includes("class_folder")) {
+      folderFilterActive = false;
+      selectFields = selectFields.replace(/,class_folder_id\b/, "");
+      res = await buildQuery(selectFields, false);
+    }
+    if (res.error) {
+      res = await buildQuery(legacySelect, false);
+      folderFilterActive = false;
+    }
   }
 
   const { data, error } = res;
@@ -1287,6 +1652,8 @@ export async function fetchCloudFolderFiles(
     class_id?: string | null;
     owner_id?: string | null;
     student_id?: string | null;
+    class_folder_id?: string | null;
+    cloud_audience?: string | null;
   }[];
 
   const ids = rows.map((f) => f.id);
@@ -1309,7 +1676,7 @@ export async function fetchCloudFolderFiles(
     }
   }
 
-  return rows.map((f) => {
+  const mapped = rows.map((f) => {
     const id = f.id;
     const titleRaw = f.title?.trim();
     const logicalKey = String(f.logical_key ?? "");
@@ -1321,18 +1688,91 @@ export async function fetchCloudFolderFiles(
       mime: f.mime ?? null,
       createdAt: String(f.created_at ?? ""),
       version: lv?.version ?? 1,
+      cloudAudience: normalizeCloudDocumentAudience(f.cloud_audience),
       classId: f.class_id ?? null,
       ownerId: f.owner_id ?? null,
       studentId: f.student_id ?? null,
+      classFolderId:
+        folderFilterActive && kind === "class"
+          ? (f.class_folder_id ?? null)
+          : null,
       storagePath: lv?.storagePath || null,
     };
   });
+
+  const vr = opts?.viewerRole;
+  return vr
+    ? mapped.filter((row) =>
+        viewerSeesCloudDocumentAudience(vr, row.cloudAudience),
+      )
+    : mapped;
+}
+
+/** Pour filtrage des sous-dossiers : une ligne par fichier (colonnes minimales). */
+export type ClassCloudAudienceIndexRow = {
+  classFolderId: string | null;
+  cloudAudience: CloudDocumentAudience;
+};
+
+/**
+ * Tous les fichiers Cloud d’une classe (sans filtre de sous-dossier),
+ * réservés à l’agrég par audience dans la vue classe.
+ */
+export async function fetchClassCloudAudienceIndex(
+  classId: string,
+  viewerRole?: UserRole,
+): Promise<ClassCloudAudienceIndexRow[]> {
+  const admin = createAdminSupabase();
+  const supabase = admin ?? (await supabaseOrNull());
+  if (!supabase) return [];
+
+  let selectFields = "class_folder_id,cloud_audience";
+
+  let res = await supabase
+    .from("files")
+    .select(selectFields)
+    .eq("class_id", classId);
+
+  if (res.error && String(res.error.message ?? "").includes("cloud_audience")) {
+    selectFields = selectFields.replace(/,cloud_audience\b/, "");
+    res = await supabase
+      .from("files")
+      .select(selectFields)
+      .eq("class_id", classId);
+  }
+
+  const { data, error } = res;
+  if (error || !data?.length) return [];
+
+  type Row = {
+    class_folder_id?: string | null;
+    cloud_audience?: string | null;
+  };
+
+  const mapped = (data as Row[]).map((r) => ({
+    classFolderId: r.class_folder_id ?? null,
+    cloudAudience: normalizeCloudDocumentAudience(r.cloud_audience),
+  }));
+
+  return viewerRole
+    ? mapped.filter((row) =>
+        viewerSeesCloudDocumentAudience(viewerRole, row.cloudAudience),
+      )
+    : mapped;
 }
 
 /**
- * Tous les fichiers Cloud avec libellés classe et professeur (explorateur racine).
+ * Tous les fichiers Cloud avec libellés classe et professeur (explorateur racine),
+ * limités aux audiences visibles par `viewerRole` si défini.
  */
-export async function fetchAllCloudExplorerFiles(): Promise<CloudExplorerFileRow[]> {
+export async function fetchAllCloudExplorerFiles(
+  viewerRole?: UserRole,
+  opts?: {
+    restrictClassId?: string | null;
+    teacherScopedClassIds?: string[] | null;
+    viewerId?: string | null;
+  },
+): Promise<CloudExplorerFileRow[]> {
   const admin = createAdminSupabase();
   const supabase = admin ?? (await supabaseOrNull());
   if (!supabase) return [];
@@ -1349,8 +1789,8 @@ export async function fetchAllCloudExplorerFiles(): Promise<CloudExplorerFileRow
     ]),
   );
 
-  const fullSelect =
-    "id,title,description,logical_key,mime,created_at,class_id,owner_id,student_id";
+  let fullSelect =
+    "id,title,description,logical_key,mime,created_at,class_id,owner_id,student_id,class_folder_id,cloud_audience";
   const legacySelect = "id,logical_key,mime,created_at,class_id,owner_id";
 
   type FileRowAll = {
@@ -1363,22 +1803,31 @@ export async function fetchAllCloudExplorerFiles(): Promise<CloudExplorerFileRow
     created_at?: string | null;
     title?: string | null;
     description?: string | null;
+    class_folder_id?: string | null;
+    cloud_audience?: string | null;
   };
 
-  const attemptFull = await supabase
-    .from("files")
-    .select(fullSelect)
-    .order("created_at", { ascending: false });
+  const tryFilesSelect = (sel: string) =>
+    supabase.from("files").select(sel).order("created_at", { ascending: false });
 
-  const attempt = attemptFull.error
-    ? await supabase
-        .from("files")
-        .select(legacySelect)
-        .order("created_at", { ascending: false })
-    : attemptFull;
+  let sel = fullSelect;
+  let res = await tryFilesSelect(sel);
 
-  const data = attempt.data as FileRowAll[] | null;
-  const error = attempt.error;
+  if (res.error && String(res.error.message ?? "").includes("cloud_audience")) {
+    sel = sel.replace(/,cloud_audience\b/, "");
+    res = await tryFilesSelect(sel);
+  }
+
+  if (res.error && String(res.error.message ?? "").includes("class_folder")) {
+    res = await tryFilesSelect(sel.replace(/,class_folder_id\b/, ""));
+  }
+
+  if (res.error) {
+    res = await tryFilesSelect(legacySelect);
+  }
+
+  const data = res.data as FileRowAll[] | null;
+  const error = res.error;
 
   if (error || !data?.length) return [];
 
@@ -1442,7 +1891,7 @@ export async function fetchAllCloudExplorerFiles(): Promise<CloudExplorerFileRow
     }
   }
 
-  return rows.map((f) => {
+  const mapped = rows.map((f) => {
     const id = f.id;
     const titleRaw = f.title?.trim();
     const logicalKey = String(f.logical_key ?? "");
@@ -1450,6 +1899,7 @@ export async function fetchAllCloudExplorerFiles(): Promise<CloudExplorerFileRow
     const cid = (f.class_id as string | null | undefined) ?? null;
     const oid = (f.owner_id as string | null | undefined) ?? null;
     const sid = (f.student_id as string | null | undefined) ?? null;
+    const aud = normalizeCloudDocumentAudience(f.cloud_audience);
     return {
       id,
       title: titleRaw || logicalKey,
@@ -1457,15 +1907,67 @@ export async function fetchAllCloudExplorerFiles(): Promise<CloudExplorerFileRow
       mime: f.mime ?? null,
       createdAt: String(f.created_at ?? ""),
       version: lv?.version ?? 1,
+      cloudAudience: aud,
       storagePath: lv?.storagePath || null,
       classId: cid,
       ownerId: oid,
       studentId: sid,
+      classFolderId: f.class_folder_id ?? null,
       classLabel: cid ? classLabelById.get(cid) ?? null : null,
       teacherName: oid ? teacherNameById.get(oid) ?? null : null,
       studentName: sid ? studentNameById.get(sid) ?? null : null,
     };
   });
+
+  let filtered = viewerRole
+    ? mapped.filter((row) =>
+        viewerSeesCloudDocumentAudience(viewerRole, row.cloudAudience),
+      )
+    : mapped;
+
+  if (viewerRole === "ELEVE" && opts?.restrictClassId) {
+    filtered = filtered.filter((row) => row.classId === opts.restrictClassId);
+  }
+
+  const scopeRestricted =
+    viewerRole &&
+    viewerRole !== "ELEVE" &&
+    opts?.teacherScopedClassIds != null;
+  if (scopeRestricted) {
+    const scopeSet = new Set(opts!.teacherScopedClassIds!);
+    const vid = opts?.viewerId ?? null;
+    const studentIdsForScope = [
+      ...new Set(
+        filtered
+          .map((r) => r.studentId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const studentClassMap = new Map<string, string>();
+    if (studentIdsForScope.length > 0) {
+      const { data: studScopeRows } = await supabase
+        .from("students")
+        .select("id,class_id")
+        .in("id", studentIdsForScope);
+      for (const row of studScopeRows ?? []) {
+        const cid = (row.class_id as string | null | undefined) ?? null;
+        if (cid) studentClassMap.set(row.id as string, cid);
+      }
+    }
+    filtered = filtered.filter((row) => {
+      if (row.classId && scopeSet.has(row.classId)) return true;
+      if (row.studentId) {
+        const eff =
+          row.classId ?? studentClassMap.get(row.studentId) ?? null;
+        if (eff && scopeSet.has(eff)) return true;
+      }
+      if (!row.classId && row.ownerId && vid && row.ownerId === vid)
+        return true;
+      return false;
+    });
+  }
+
+  return filtered;
 }
 
 const CLOUD_DOCUMENTS_BUCKET = "documents";

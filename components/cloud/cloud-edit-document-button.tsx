@@ -3,7 +3,7 @@
 import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { toast } from "sonner";
 import { updateCloudDocumentMetadataAction } from "@/app/actions/cloud-files";
 import type {
@@ -25,7 +25,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { CloudDocumentAudience } from "@/lib/cloud-document-audience";
 import type { CloudClassSelectOption } from "./cloud-upload-document-button";
+import { CloudClassFolderPlacementPicker } from "@/components/cloud/cloud-class-folder-placement-picker";
+import { CloudDocumentAudienceRadios } from "@/components/cloud/cloud-audience-ui";
 
 export type CloudEditDocumentFileRef = {
   id: string;
@@ -33,6 +36,13 @@ export type CloudEditDocumentFileRef = {
   description: string;
   classId: string | null;
   studentId: string | null;
+  classFolderId: string | null;
+  cloudAudience: CloudDocumentAudience;
+};
+
+type FolderOptionsForClass = {
+  classId: string;
+  options: { id: string; label: string }[];
 };
 
 type Props = {
@@ -41,6 +51,7 @@ type Props = {
   classOptions: CloudClassSelectOption[];
   studentOptions: CloudStudentUploadOption[];
   folderSlug?: string | null;
+  folderOptionsForClass?: FolderOptionsForClass;
   /** Affichage compact (icône seule) dans les grilles. */
   compact?: boolean;
 };
@@ -48,6 +59,9 @@ type Props = {
 function errorMessageKey(code: UpdateCloudDocumentMetadataErrorCode): string {
   if (code === "STUDENT_UNKNOWN" || code === "STUDENT_CLASS_MISMATCH") {
     return `uploadError_${code}`;
+  }
+  if (code === "INVALID_AUDIENCE") {
+    return "uploadError_INVALID_AUDIENCE";
   }
   return `editError_${code}`;
 }
@@ -58,6 +72,7 @@ export function CloudEditDocumentButton({
   classOptions,
   studentOptions,
   folderSlug = null,
+  folderOptionsForClass,
   compact = false,
 }: Props) {
   const t = useTranslations("cloud");
@@ -65,6 +80,15 @@ export function CloudEditDocumentButton({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(
+    file.classId,
+  );
+
+  useEffect(() => {
+    if (open) {
+      setSelectedClassId(file.classId);
+    }
+  }, [open, file.classId]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -154,7 +178,11 @@ export function CloudEditDocumentButton({
               name="classId"
               required
               disabled={pending}
-              defaultValue={file.classId ?? "__none__"}
+              value={selectedClassId ?? "__none__"}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSelectedClassId(v === "__none__" ? null : v);
+              }}
               className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <option value="__none__">{t("uploadNoClass")}</option>
@@ -165,6 +193,16 @@ export function CloudEditDocumentButton({
               ))}
             </select>
           </div>
+
+          <CloudClassFolderPlacementPicker
+            locale={locale}
+            dialogOpen={open}
+            selectedClassId={selectedClassId}
+            seededFolderOptions={folderOptionsForClass}
+            preferredFolderId={file.classFolderId ?? undefined}
+            selectId={`cloud-edit-folder-${file.id}`}
+            disabled={pending}
+          />
 
           <div className="space-y-2">
             <Label htmlFor={`cloud-edit-student-${file.id}`}>
@@ -184,10 +222,16 @@ export function CloudEditDocumentButton({
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">
-              {t("uploadFieldStudentHint")}
-            </p>
+            {t("uploadFieldStudentHint").trim() ? (
+              <p className="text-xs text-muted-foreground">{t("uploadFieldStudentHint")}</p>
+            ) : null}
           </div>
+
+          <CloudDocumentAudienceRadios
+            disabled={pending}
+            defaultValue={file.cloudAudience}
+            fieldIdPrefix={`cloud-edit-audience-${file.id}`}
+          />
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 

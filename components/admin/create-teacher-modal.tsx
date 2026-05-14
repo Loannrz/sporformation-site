@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { AppLocale } from "@/i18n/routing";
-import type { TeacherEmploymentStatus, UserRole } from "@/types";
+import type { UserRole } from "@/types";
 import { useRouter } from "@/i18n/navigation";
 import type { AdminClassOption } from "@/lib/data/school";
 import { PrincipalClassPicker } from "@/components/admin/principal-class-picker";
@@ -27,13 +27,14 @@ import { useState, useTransition, useEffect, type FormEvent } from "react";
 type Props = {
   locale: AppLocale;
   viewerRole: UserRole;
-  classOptions: AdminClassOption[];
+  /** Liste des classes (titulaires) ; tableau vide si indisponible. */
+  classOptions?: AdminClassOption[];
 };
 
 export function CreateTeacherModal({
   locale,
   viewerRole,
-  classOptions,
+  classOptions = [],
 }: Props) {
   const router = useRouter();
   const t = useTranslations("admin.accounts");
@@ -45,10 +46,6 @@ export function CreateTeacherModal({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [role, setRole] = useState<UserRole>("PROFESSEUR");
-  const [employment, setEmployment] =
-    useState<TeacherEmploymentStatus>("NEW_TO_SCHOOL");
-  const [joinedAt, setJoinedAt] = useState("");
-  const [leftOn, setLeftOn] = useState("");
   const [bio, setBio] = useState("");
   const [subjectsCsv, setSubjectsCsv] = useState("");
   const [principalClassIds, setPrincipalClassIds] = useState<string[]>([]);
@@ -58,9 +55,6 @@ export function CreateTeacherModal({
     setFirstName("");
     setLastName("");
     setRole("PROFESSEUR");
-    setEmployment("NEW_TO_SCHOOL");
-    setJoinedAt("");
-    setLeftOn("");
     setBio("");
     setSubjectsCsv("");
     setPrincipalClassIds([]);
@@ -81,54 +75,84 @@ export function CreateTeacherModal({
       return;
     }
     startTransition(async () => {
-      const res = await createTeacherAction(locale, {
-        email,
-        firstName,
-        lastName,
-        role,
-        employmentStatus: employment,
-        joinedAt: joinedAt.trim() || null,
-        leftEstablishmentOn:
-          employment === "FORMER_INACTIVE" ? leftOn.trim() || null : null,
-        bio: bio.trim() || undefined,
-        subjectsCsv: subjectsCsv.trim() || undefined,
-        principalClassIds:
-          role === "PROF_PRINCIPAL" ? principalClassIds : undefined,
-      });
-      if (!res.ok) {
+      let raw: Awaited<ReturnType<typeof createTeacherAction>>;
+      try {
+        raw = await createTeacherAction(locale, {
+          email,
+          firstName,
+          lastName,
+          role,
+          employmentStatus: "NEW_TO_SCHOOL",
+          joinedAt: null,
+          leftEstablishmentOn: null,
+          bio: bio.trim() || undefined,
+          subjectsCsv: subjectsCsv.trim() || undefined,
+          principalClassIds:
+            role === "PROF_PRINCIPAL" ? principalClassIds : undefined,
+        });
+      } catch {
+        setError(t("errorGeneric"));
+        return;
+      }
+
+      if (!raw || typeof raw !== "object" || !("ok" in raw)) {
+        setError(t("errorGeneric"));
+        return;
+      }
+
+      if (!raw.ok) {
+        const err = raw.error;
         setError(
-          res.error === "NO_SERVICE_ROLE"
+          err === "NO_SERVICE_ROLE"
             ? t("errorNoServiceRole")
-            : res.error === "INVALID_ROLE"
+            : err === "INVALID_ROLE"
               ? t("errorInvalidRole")
-              : res.error === "LEFT_DATE_REQUIRED"
-                ? t("errorLeftDateRequired")
-                : res.error === "MISSING_REQUIRED_FIELDS"
-                  ? t("errorMissingRequired")
-                  : res.error === "INVALID_EMAIL"
-                    ? t("errorInvalidEmail")
-                    : res.error === "EMAIL_ALREADY_IN_APP"
+              : err === "MISSING_REQUIRED_FIELDS"
+                ? t("errorMissingRequired")
+                : err === "INVALID_EMAIL"
+                  ? t("errorInvalidEmail")
+                  : err === "PASSWORD_TOO_SHORT"
+                    ? t("passwordTooShort")
+                    : err === "EMAIL_ALREADY_IN_APP"
                       ? t("errorEmailAlreadyInApp")
-                      : res.error === "AUTH_USER_LOOKUP_FAILED"
-                        ? t("errorAuthUserLookup")
-                        : res.error === "PRINCIPAL_CLASSES_REQUIRED"
-                          ? t("errorPrincipalClassesRequired")
-                          : res.error === "INVALID_PRINCIPAL_CLASSES"
-                            ? t("errorInvalidPrincipalClasses")
-                            : typeof res.error === "string"
-                          ? res.error
-                          : t("errorGeneric"),
+                      : err === "EMAIL_AUTH_EXISTS"
+                        ? t("errorEmailAuthExists")
+                        : err === "AUTH_USER_LOOKUP_FAILED"
+                          ? t("errorAuthUserLookup")
+                          : err === "PRINCIPAL_CLASSES_REQUIRED"
+                            ? t("errorPrincipalClassesRequired")
+                            : err === "INVALID_PRINCIPAL_CLASSES"
+                              ? t("errorInvalidPrincipalClasses")
+                              : typeof err === "string"
+                                ? err
+                                : t("errorGeneric"),
         );
         return;
       }
+
+      if ("pendingSignup" in raw && raw.pendingSignup) {
+        toast.success(t("createdPendingSignupToast"));
+        setOpen(false);
+        reset();
+        router.refresh();
+        return;
+      }
+
+      const createdId =
+        "id" in raw && typeof raw.id === "string" ? raw.id : null;
+      if (!createdId) {
+        setError(t("errorGeneric"));
+        return;
+      }
+
       toast.success(
-        "linkedExistingAuth" in res && res.linkedExistingAuth
+        "linkedExistingAuth" in raw && raw.linkedExistingAuth
           ? t("createdLinkedExistingAuthToast")
           : t("createdToast"),
       );
       setOpen(false);
       reset();
-      router.push(`/administration/comptes/${res.id}`);
+      router.push(`/administration/comptes/${createdId}`);
     });
   };
 
@@ -213,9 +237,6 @@ export function CreateTeacherModal({
                 >
                   <option value="PROFESSEUR">{t("roleTeacher")}</option>
                   <option value="PROF_PRINCIPAL">{t("rolePrincipal")}</option>
-                  <option value="ADMINISTRATEUR">
-                    {t("roleAdministrator")}
-                  </option>
                 </select>
               )}
             </div>
@@ -230,49 +251,6 @@ export function CreateTeacherModal({
                 onChange={setPrincipalClassIds}
               />
             ) : null}
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="ct-emp">{t("employmentStatus")} *</Label>
-              <select
-                id="ct-emp"
-                value={employment}
-                onChange={(e) =>
-                  setEmployment(e.target.value as TeacherEmploymentStatus)
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="NEW_TO_SCHOOL">{t("employmentNew")}</option>
-                <option value="ACTIVE_AT_SCHOOL">{t("employmentActive")}</option>
-                <option value="FORMER_INACTIVE">{t("employmentFormer")}</option>
-              </select>
-              <p className="text-xs text-muted-foreground">
-                {t("employmentHelp")}
-              </p>
-            </div>
-            {employment === "FORMER_INACTIVE" ? (
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="ct-left">{t("leftOnField")} *</Label>
-                <Input
-                  id="ct-left"
-                  type="date"
-                  value={leftOn}
-                  onChange={(e) => setLeftOn(e.target.value)}
-                  required
-                />
-              </div>
-            ) : (
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="ct-joined">{t("joinedAtOptional")}</Label>
-                <Input
-                  id="ct-joined"
-                  type="date"
-                  value={joinedAt}
-                  onChange={(e) => setJoinedAt(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t("joinedAtHelp")}
-                </p>
-              </div>
-            )}
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="ct-bio">{t("bioOptional")}</Label>
               <Textarea

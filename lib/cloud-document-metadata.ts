@@ -5,6 +5,7 @@ export type UpdateCloudDocumentMetadataErrorCode =
   | "FORBIDDEN"
   | "NO_SERVICE_ROLE"
   | "MISSING_FIELDS"
+  | "INVALID_AUDIENCE"
   | "FILE_NOT_FOUND"
   | "STUDENT_UNKNOWN"
   | "STUDENT_CLASS_MISMATCH"

@@ -44,6 +44,24 @@ async function ensurePrincipalClassAssignmentAllowed(
   return { ok: true };
 }
 
+async function ensureAssignedClassesExist(
+  admin: SupabaseClient,
+  classIds: string[],
+): Promise<
+  { ok: true } | { ok: false; error: "INVALID_ASSIGNED_CLASSES" }
+> {
+  if (!classIds.length) return { ok: true };
+  const { data, error } = await admin
+    .from("classes")
+    .select("id")
+    .in("id", classIds);
+  if (error) return { ok: false, error: "INVALID_ASSIGNED_CLASSES" };
+  if (!data || data.length !== classIds.length) {
+    return { ok: false, error: "INVALID_ASSIGNED_CLASSES" };
+  }
+  return { ok: true };
+}
+
 export async function stripClassFromOtherProfiles(
   admin: SupabaseClient,
   classId: string,
@@ -106,6 +124,71 @@ async function syncPrincipalClassAssignments(
   return { ok: true };
 }
 
+export type PendingTeacherInviteRow = {
+  email: string;
+  first_name: string;
+  last_name: string;
+  base_role: UserRole;
+  teacher_employment_status: TeacherEmploymentStatus;
+  joined_at: string | null;
+  left_establishment_on: string | null;
+  bio: string | null;
+  subjects: string[] | null;
+  principal_class_ids: string[] | null;
+};
+
+/** Après `auth.admin.createUser`, crée le profil à partir de l’invitation et supprime la ligne pending. */
+export async function finalizeTeacherAccountFromPendingInvite(
+  admin: SupabaseClient,
+  params: {
+    userId: string;
+    email: string;
+    invitation: PendingTeacherInviteRow;
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const inv = params.invitation;
+  const normalizedPrincipal = normalizePrincipalClassIds(
+    inv.principal_class_ids ?? [],
+  );
+  const ins = await insertTeacherProfileRow(admin, {
+    id: params.userId,
+    email: params.email,
+    firstName: inv.first_name,
+    lastName: inv.last_name,
+    role: inv.base_role,
+    employmentStatus: inv.teacher_employment_status,
+    joinedAt: inv.joined_at,
+    leftEstablishmentOn: inv.left_establishment_on,
+    bio: inv.bio ?? undefined,
+    subjectsCsv: (inv.subjects ?? []).join(","),
+    principalClassIds: normalizedPrincipal,
+    passwordInitiallySet: true,
+  });
+  if (!ins.ok) return ins;
+
+  const sync = await syncPrincipalClassAssignments(
+    admin,
+    params.userId,
+    inv.base_role,
+    normalizedPrincipal,
+  );
+  if (!sync.ok) {
+    await admin.from("profiles").delete().eq("id", params.userId);
+    return sync;
+  }
+
+  const { error: delErr } = await admin
+    .from("teacher_pending_signups")
+    .delete()
+    .eq("email", params.email.trim().toLowerCase());
+  if (delErr) {
+    await admin.from("profiles").delete().eq("id", params.userId);
+    return { ok: false, error: delErr.message };
+  }
+
+  return { ok: true };
+}
+
 async function requireDirector() {
   const user = await getSessionUser();
   if (!user || !isDirector(user)) {
@@ -163,6 +246,25 @@ function generateInternalOnlyPassword(): string {
   return `${randomBytes(28).toString("base64url")}Zz9!`;
 }
 
+const TEACHER_INITIAL_PASSWORD_MIN = 8;
+
+function resolveInitialTeacherPassword(raw: string | undefined | null):
+  | { ok: true; authPassword: string; initiallySet: boolean }
+  | { ok: false; error: "PASSWORD_TOO_SHORT" } {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) {
+    return {
+      ok: true,
+      authPassword: generateInternalOnlyPassword(),
+      initiallySet: false,
+    };
+  }
+  if (trimmed.length < TEACHER_INITIAL_PASSWORD_MIN) {
+    return { ok: false, error: "PASSWORD_TOO_SHORT" };
+  }
+  return { ok: true, authPassword: trimmed, initiallySet: true };
+}
+
 function isAuthEmailTakenError(err: { message?: string } | null | undefined): boolean {
   if (!err?.message) return false;
   const m = err.message.toLowerCase();
@@ -207,6 +309,10 @@ type TeacherProfileInsertInput = {
   subjectsCsv?: string;
   /** Classes dont cet enseignant est prof principal (si rôle PP). */
   principalClassIds: string[];
+  /** Classes où il intervient en tant que professeur (PROFESSEUR). */
+  assignedClassIds?: string[];
+  /** Mot de passe défini à la création : pas de contrainte de changement à la 1ère connexion. */
+  passwordInitiallySet?: boolean;
 };
 
 async function insertTeacherProfileRow(
@@ -220,9 +326,14 @@ async function insertTeacherProfileRow(
 
   const isFormer = input.employmentStatus === "FORMER_INACTIVE";
   const activeAt = !isFormer;
-  const mustSet = !isFormer;
+  const initiallySet = input.passwordInitiallySet === true;
+  const mustSet = !isFormer && !initiallySet;
   const principalClassIdsForRow =
     input.role === "PROF_PRINCIPAL" ? input.principalClassIds : [];
+  const assignedClassIdsForRow =
+    input.role === "PROFESSEUR"
+      ? normalizePrincipalClassIds(input.assignedClassIds ?? [])
+      : [];
 
   const profileRow: Record<string, unknown> = {
     id: input.id,
@@ -238,6 +349,7 @@ async function insertTeacherProfileRow(
     must_set_password: mustSet,
     teacher_employment_status: input.employmentStatus,
     principal_class_ids: principalClassIdsForRow,
+    assigned_class_ids: assignedClassIdsForRow,
   };
 
   const { error: pErr } = await admin.from("profiles").insert(profileRow);
@@ -279,6 +391,8 @@ export async function createTeacherAction(
     subjectsCsv?: string;
     /** Obligatoire si role === PROF_PRINCIPAL — UUID des classes. */
     principalClassIds?: string[];
+    /** Optionnel — si renseigné (≥ 8 caractères), l’enseignant peut se connecter sans étape « premier mot de passe ». */
+    password?: string | null;
   },
 ) {
   const gate = await requireTeacherManager();
@@ -333,9 +447,64 @@ export async function createTeacherAction(
 
   const isFormer = input.employmentStatus === "FORMER_INACTIVE";
 
+  const pw = resolveInitialTeacherPassword(input.password);
+  if (!pw.ok) {
+    return { ok: false as const, error: "PASSWORD_TOO_SHORT" as const };
+  }
+
+  const subjectsArr = (input.subjectsCsv ?? "")
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  /** Pas de compte Auth tant que l’enseignant ne s’inscrit pas (mot de passe vide, compte actif / nouvelle recrue). */
+  if (!isFormer && !pw.initiallySet) {
+    const { data: existingProf } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+    if (existingProf) {
+      return { ok: false as const, error: "EMAIL_ALREADY_IN_APP" as const };
+    }
+
+    const orphanAuthId = await findAuthUserIdByEmail(admin, email);
+    if (orphanAuthId) {
+      return { ok: false as const, error: "EMAIL_AUTH_EXISTS" as const };
+    }
+
+    const invitePayload = {
+      email,
+      first_name: fn,
+      last_name: ln,
+      base_role: input.role,
+      teacher_employment_status: input.employmentStatus,
+      joined_at: input.joinedAt?.trim() || null,
+      left_establishment_on: null,
+      bio: input.bio?.trim() || null,
+      subjects: subjectsArr.length ? subjectsArr : [],
+      principal_class_ids: normalizedPrincipal,
+      created_by: gate.user.id,
+    };
+
+    const { error: invErr } = await admin
+      .from("teacher_pending_signups")
+      .upsert(invitePayload, { onConflict: "email" });
+
+    if (invErr) {
+      return { ok: false as const, error: invErr.message };
+    }
+
+    revalidatePath(`/${locale}/administration/comptes`);
+    revalidatePath(`/${locale}/cloud`);
+    return { ok: true as const, pendingSignup: true as const };
+  }
+
+  await admin.from("teacher_pending_signups").delete().eq("email", email);
+
   const { data: created, error: cErr } = await admin.auth.admin.createUser({
     email,
-    password: generateInternalOnlyPassword(),
+    password: pw.authPassword,
     email_confirm: true,
   });
 
@@ -360,6 +529,8 @@ export async function createTeacherAction(
     }
 
     id = existingId;
+    await admin.from("teacher_pending_signups").delete().eq("email", email);
+
     const ins = await insertTeacherProfileRow(admin, {
       id,
       email,
@@ -372,10 +543,24 @@ export async function createTeacherAction(
       bio: input.bio,
       subjectsCsv: input.subjectsCsv,
       principalClassIds: normalizedPrincipal,
+      passwordInitiallySet: pw.initiallySet,
     });
 
     if (!ins.ok) {
       return { ok: false as const, error: ins.error };
+    }
+
+    if (pw.initiallySet) {
+      const { error: updErr } = await admin.auth.admin.updateUserById(id, {
+        password: pw.authPassword,
+      });
+      if (updErr) {
+        await admin.from("profiles").delete().eq("id", id);
+        return {
+          ok: false as const,
+          error: updErr.message ?? "AUTH_PASSWORD_UPDATE_FAILED",
+        };
+      }
     }
 
     const syncO = await syncPrincipalClassAssignments(
@@ -415,6 +600,7 @@ export async function createTeacherAction(
     bio: input.bio,
     subjectsCsv: input.subjectsCsv,
     principalClassIds: normalizedPrincipal,
+    passwordInitiallySet: pw.initiallySet,
   });
 
   if (!ins.ok) {
@@ -455,6 +641,8 @@ export async function updateTeacherProfileAction(
     subjectsCsv: string;
     /** Renseigné lorsque role === PROF_PRINCIPAL (directeur). */
     principalClassIds?: string[];
+    /** Renseigné lorsque role === PROFESSEUR : classes où il enseigne. */
+    assignedClassIds?: string[];
   },
 ) {
   const gate = await requireTeacherManager();
@@ -509,8 +697,17 @@ export async function updateTeacherProfileAction(
     return { ok: false as const, error: principalGate.error };
   }
 
+  const normalizedAssigned = normalizePrincipalClassIds(input.assignedClassIds ?? []);
+  const assignedGate = await ensureAssignedClassesExist(admin, normalizedAssigned);
+  if (!assignedGate.ok) {
+    return { ok: false as const, error: assignedGate.error };
+  }
+
   const principalForProfile =
     input.role === "PROF_PRINCIPAL" ? normalizedPrincipal : [];
+
+  const assignedForProfile =
+    input.role === "PROFESSEUR" ? normalizedAssigned : [];
 
   const { error: pErr } = await admin
     .from("profiles")
@@ -522,6 +719,7 @@ export async function updateTeacherProfileAction(
       base_role: input.role,
       subjects: subjects.length ? subjects : [],
       principal_class_ids: principalForProfile,
+      assigned_class_ids: assignedForProfile,
       updated_at: new Date().toISOString(),
     })
     .eq("id", teacherId);

@@ -29,9 +29,79 @@ import {
 import type { AppLocale } from "@/i18n/routing";
 import type { UserRole } from "@/types";
 import { useRouter } from "@/i18n/navigation";
+import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
-import { useState, useTransition, useEffect } from "react";
+import {
+  useEffect,
+  useState,
+  useTransition,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
+import {
+  AlertTriangle,
+  KeyRound,
+  LogOut,
+  UserCircle,
+} from "lucide-react";
+
+function DetailSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+  variant = "default",
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description?: string;
+  children: ReactNode;
+  variant?: "default" | "danger";
+}) {
+  return (
+    <section
+      className={cn(
+        "space-y-5 rounded-2xl border p-5 sm:p-6",
+        variant === "danger"
+          ? "border-destructive/35 bg-destructive/[0.07] shadow-sm dark:bg-destructive/[0.12]"
+          : "border-border/70 bg-muted/20 shadow-sm ring-1 ring-black/[0.03] dark:bg-muted/15 dark:ring-white/[0.04]",
+      )}
+    >
+      <div className="flex gap-4">
+        <div
+          className={cn(
+            "flex size-11 shrink-0 items-center justify-center rounded-xl",
+            variant === "danger"
+              ? "bg-destructive/15 text-destructive"
+              : "bg-primary/10 text-primary",
+          )}
+        >
+          <Icon className="size-5" aria-hidden />
+        </div>
+        <div className="min-w-0 space-y-1">
+          <h2
+            className={cn(
+              "text-lg font-semibold leading-tight tracking-tight",
+              variant === "danger" && "text-destructive",
+            )}
+          >
+            {title}
+          </h2>
+          {description ? (
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="border-t border-border/60 pt-5">{children}</div>
+    </section>
+  );
+}
+
+const nativeSelectClass =
+  "flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 type Props = {
   locale: AppLocale;
@@ -65,6 +135,9 @@ export function TeacherAdminPanel({
   const [principalClassIds, setPrincipalClassIds] = useState<string[]>(
     staff.principalClassIds ?? [],
   );
+  const [assignedClassIds, setAssignedClassIds] = useState<string[]>(
+    staff.assignedClassIds ?? [],
+  );
 
   const [newPassword, setNewPassword] = useState("");
   const [leftOn, setLeftOn] = useState(
@@ -83,6 +156,7 @@ export function TeacherAdminPanel({
     setRole(staff.role);
     setSubjectsCsv((staff.subjects ?? []).join(", "));
     setPrincipalClassIds(staff.principalClassIds ?? []);
+    setAssignedClassIds(staff.assignedClassIds ?? []);
     setLeftOn(
       staff.leftEstablishmentOn ?? new Date().toISOString().slice(0, 10),
     );
@@ -99,6 +173,7 @@ export function TeacherAdminPanel({
       INVALID_ROLE: t("errorInvalidRole"),
       PRINCIPAL_CLASSES_REQUIRED: t("errorPrincipalClassesRequired"),
       INVALID_PRINCIPAL_CLASSES: t("errorInvalidPrincipalClasses"),
+      INVALID_ASSIGNED_CLASSES: t("errorInvalidAssignedClasses"),
     };
     return keys[code] ?? code;
   };
@@ -120,7 +195,8 @@ export function TeacherAdminPanel({
         role,
         subjectsCsv,
         principalClassIds:
-          role === "PROF_PRINCIPAL" ? principalClassIds : undefined,
+          role === "PROF_PRINCIPAL" ? principalClassIds : [],
+        assignedClassIds: role === "PROFESSEUR" ? assignedClassIds : [],
       });
       if (!res.ok) {
         setError(mapErr(String(res.error)));
@@ -211,23 +287,27 @@ export function TeacherAdminPanel({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {!staff.activeAtEstablishment ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-500/[0.14] via-amber-500/[0.08] to-transparent px-4 py-4 text-sm shadow-sm dark:from-amber-500/20 dark:via-amber-500/12">
           <Badge
             variant="outline"
-            className="border-amber-600 text-amber-900 dark:text-amber-100"
+            className="border-amber-600/70 font-normal text-amber-950 dark:text-amber-100"
           >
             {t("badgeLeft")}
           </Badge>
-          <span>
-            {t("leftOnLabel")}: {staff.leftEstablishmentOn ?? "—"}
+          <span className="text-foreground/90">
+            <span className="font-medium text-foreground">
+              {t("leftOnLabel")}
+            </span>{" "}
+            {staff.leftEstablishmentOn ?? "—"}
           </span>
           {!isAdminViewer ? (
             <Button
               type="button"
               size="sm"
               variant="secondary"
+              className="shadow-sm"
               onClick={reactivate}
               disabled={pending}
             >
@@ -237,8 +317,7 @@ export function TeacherAdminPanel({
         </div>
       ) : null}
 
-      <section className="space-y-4 rounded-xl border border-border bg-card/50 p-4">
-        <h2 className="text-lg font-semibold">{t("editProfile")}</h2>
+      <DetailSection icon={UserCircle} title={t("editProfile")}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="ed-first">{t("firstName")}</Label>
@@ -246,6 +325,7 @@ export function TeacherAdminPanel({
               id="ed-first"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
+              className="shadow-sm"
             />
           </div>
           <div className="space-y-2">
@@ -254,6 +334,7 @@ export function TeacherAdminPanel({
               id="ed-last"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              className="shadow-sm"
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
@@ -263,6 +344,7 @@ export function TeacherAdminPanel({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="shadow-sm"
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
@@ -272,6 +354,7 @@ export function TeacherAdminPanel({
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               rows={3}
+              className="resize-none shadow-sm"
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
@@ -284,12 +367,17 @@ export function TeacherAdminPanel({
                   const r = e.target.value as UserRole;
                   setRole(r);
                   if (r !== "PROF_PRINCIPAL") setPrincipalClassIds([]);
+                  if (r !== "PROFESSEUR") setAssignedClassIds([]);
                 }}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={nativeSelectClass}
               >
                 <option value="PROFESSEUR">{t("roleTeacher")}</option>
                 <option value="PROF_PRINCIPAL">{t("rolePrincipal")}</option>
               </select>
+            ) : staff.role === "ADMINISTRATEUR" ? (
+              <div className="rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm shadow-sm">
+                {t("roleAdministrator")}
+              </div>
             ) : (
               <select
                 id="ed-role"
@@ -299,10 +387,10 @@ export function TeacherAdminPanel({
                   const r = e.target.value as UserRole;
                   setRole(r);
                   if (r !== "PROF_PRINCIPAL") setPrincipalClassIds([]);
+                  if (r !== "PROFESSEUR") setAssignedClassIds([]);
                 }}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                className={cn(nativeSelectClass, "disabled:opacity-60")}
               >
-                <option value="ADMINISTRATEUR">{t("roleAdministrator")}</option>
                 <option value="PROF_PRINCIPAL">{t("rolePrincipal")}</option>
                 <option value="PROFESSEUR">{t("roleTeacher")}</option>
                 {isSelf ? (
@@ -327,6 +415,17 @@ export function TeacherAdminPanel({
               onChange={setPrincipalClassIds}
             />
           ) : null}
+          {role === "PROFESSEUR" ? (
+            <PrincipalClassPicker
+              id="ed-assigned-classes"
+              label={t("assignedClassesLabel")}
+              help={t("assignedClassesHelp")}
+              emptyHint={t("assignedClassesEmpty")}
+              classOptions={classOptions}
+              value={assignedClassIds}
+              onChange={setAssignedClassIds}
+            />
+          ) : null}
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="ed-subj">{t("subjectsHint")}</Label>
             <Input
@@ -334,16 +433,21 @@ export function TeacherAdminPanel({
               value={subjectsCsv}
               onChange={(e) => setSubjectsCsv(e.target.value)}
               placeholder={t("subjectsPlaceholder")}
+              className="shadow-sm"
             />
           </div>
         </div>
-        <Button type="button" onClick={saveProfile} disabled={pending}>
+        <Button
+          type="button"
+          className="shadow-sm"
+          onClick={saveProfile}
+          disabled={pending}
+        >
           {pending ? t("saving") : t("saveProfile")}
         </Button>
-      </section>
+      </DetailSection>
 
-      <section className="space-y-4 rounded-xl border border-border bg-card/50 p-4">
-        <h2 className="text-lg font-semibold">{t("resetPasswordTitle")}</h2>
+      <DetailSection icon={KeyRound} title={t("resetPasswordTitle")}>
         <div className="space-y-2 sm:max-w-md">
           <Label htmlFor="ed-pw">{t("newPassword")}</Label>
           <Input
@@ -353,29 +457,29 @@ export function TeacherAdminPanel({
             onChange={(e) => setNewPassword(e.target.value)}
             minLength={8}
             autoComplete="new-password"
+            className="shadow-sm"
           />
         </div>
         <Button
           type="button"
           variant="secondary"
+          className="shadow-sm"
           onClick={resetPassword}
           disabled={pending}
         >
           {t("applyPassword")}
         </Button>
-      </section>
+      </DetailSection>
 
       {staff.activeAtEstablishment &&
       !isSelf &&
       !isDirectorTarget &&
       !isAdminViewer ? (
-        <section className="space-y-4 rounded-xl border border-border bg-card/50 p-4">
-          <h2 className="text-lg font-semibold">
-            {t("leaveEstablishmentTitle")}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {t("leaveEstablishmentHint")}
-          </p>
+        <DetailSection
+          icon={LogOut}
+          title={t("leaveEstablishmentTitle")}
+          description={t("leaveEstablishmentHint")}
+        >
           <div className="space-y-2 sm:max-w-xs">
             <Label htmlFor="ed-left">{t("leftOnField")}</Label>
             <Input
@@ -383,26 +487,29 @@ export function TeacherAdminPanel({
               type="date"
               value={leftOn}
               onChange={(e) => setLeftOn(e.target.value)}
+              className="shadow-sm"
             />
           </div>
           <Button
             type="button"
             variant="secondary"
+            className="shadow-sm"
             onClick={markLeft}
             disabled={pending}
           >
             {t("markLeftSubmit")}
           </Button>
-        </section>
+        </DetailSection>
       ) : null}
 
       {!isSelf && !isDirectorTarget && !isAdminViewer ? (
-        <section className="space-y-4 rounded-xl border border-destructive/50 bg-destructive/5 p-4">
-          <h2 className="text-lg font-semibold text-destructive">
-            {t("dangerZone")}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t("deleteWarnLead")}</p>
-          <ul className="list-inside list-disc text-sm text-destructive/90">
+        <DetailSection
+          icon={AlertTriangle}
+          variant="danger"
+          title={t("dangerZone")}
+          description={t("deleteWarnLead")}
+        >
+          <ul className="list-inside list-disc space-y-1 text-sm text-destructive/90">
             <li>{t("deleteWarnDocs")}</li>
             <li>{t("deleteWarnStorage")}</li>
           </ul>
@@ -430,19 +537,22 @@ export function TeacherAdminPanel({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-        </section>
+        </DetailSection>
       ) : null}
 
       {message ? (
         <p
-          className="text-sm text-emerald-600 dark:text-emerald-400"
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-800 dark:text-emerald-300"
           role="status"
         >
           {message}
         </p>
       ) : null}
       {error ? (
-        <p className="text-sm text-destructive" role="alert">
+        <p
+          className="rounded-xl border border-destructive/35 bg-destructive/[0.08] px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
           {error}
         </p>
       ) : null}
