@@ -1,6 +1,6 @@
 "use client";
 
-import { adminClassOptionLabel } from "@/lib/academic-year-display";
+import { formatAcademicYearRange } from "@/lib/academic-year-display";
 import type { AdminClassOption } from "@/lib/data/school";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -83,6 +83,10 @@ export function PrincipalClassPicker({
         >
           {classOptions.map((c) => {
             const checked = value.includes(c.id);
+            const range = formatAcademicYearRange(
+              c.academicYearStart,
+              c.academicYearEnd,
+            );
             return (
               <button
                 key={c.id}
@@ -92,43 +96,48 @@ export function PrincipalClassPicker({
                 aria-pressed={singleSelect ? undefined : checked}
                 onClick={() => toggle(c.id, checked)}
                 className={cn(
-                  "group/chip relative inline-flex select-none items-center gap-1.5 overflow-hidden rounded-full border px-3.5 py-1.5 text-xs font-medium leading-none",
-                  "transition-[transform,box-shadow,background-color,border-color,color] duration-150 ease-out",
+                  "group/chip relative inline-flex select-none items-center gap-1.5 overflow-hidden rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium leading-none",
+                  "transition-[transform,box-shadow,background-color,border-color,color] duration-200 ease-out",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   "active:scale-[0.97]",
                   checked
                     ? cn(
-                        "border-transparent text-primary-foreground shadow-md shadow-primary/25",
-                        "bg-gradient-to-b from-primary to-primary/85",
-                        "hover:from-primary hover:to-primary/95 hover:shadow-lg hover:shadow-primary/30",
-                        "ring-1 ring-inset ring-white/20 dark:ring-white/10",
+                        "border-transparent text-primary-foreground",
+                        "bg-gradient-to-br from-primary via-primary to-primary/80",
+                        "shadow-md shadow-primary/30",
+                        "ring-1 ring-inset ring-white/25 dark:ring-white/10",
+                        "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/40",
                       )
                     : cn(
-                        "border-border/80 bg-background/90 text-foreground/85 shadow-sm backdrop-blur-sm",
-                        "hover:-translate-y-px hover:border-primary/40 hover:bg-primary/[0.06] hover:text-foreground hover:shadow",
-                        "dark:bg-background/40 dark:hover:bg-primary/[0.12]",
+                        "border-border/70 bg-gradient-to-b from-background to-muted/40 text-foreground/85 shadow-soft",
+                        "hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.05] hover:text-foreground",
+                        "dark:border-border/60 dark:from-background/70 dark:to-muted/15 dark:shadow-soft-dark",
+                        "dark:hover:bg-primary/[0.12]",
                       ),
                 )}
               >
-                <span
-                  className={cn(
-                    "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full transition-all duration-150",
-                    checked
-                      ? "scale-100 bg-white/25 opacity-100"
-                      : "scale-50 bg-transparent opacity-0",
-                  )}
-                  aria-hidden
-                >
-                  <Check
+                {checked ? (
+                  <span
+                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/25 ring-1 ring-inset ring-white/30"
+                    aria-hidden
+                  >
+                    <Check className="h-2.5 w-2.5 stroke-[3]" />
+                  </span>
+                ) : null}
+                <span className="whitespace-nowrap">{c.name}</span>
+                {range ? (
+                  <span
                     className={cn(
-                      "h-2.5 w-2.5 stroke-[3] transition-transform duration-150",
-                      checked ? "scale-100" : "scale-0",
+                      "ml-0.5 rounded-full px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums tracking-wide transition-colors",
+                      checked
+                        ? "bg-white/20 text-primary-foreground/95 ring-1 ring-inset ring-white/15"
+                        : "bg-muted/70 text-muted-foreground/85 ring-1 ring-inset ring-border/60 group-hover/chip:bg-primary/10 group-hover/chip:text-primary group-hover/chip:ring-primary/20",
                     )}
-                  />
-                </span>
-                <span className="whitespace-nowrap">
-                  {adminClassOptionLabel(c)}
-                </span>
+                    aria-hidden
+                  >
+                    {range}
+                  </span>
+                ) : null}
               </button>
             );
           })}

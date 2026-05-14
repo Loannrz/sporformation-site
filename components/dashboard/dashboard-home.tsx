@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { announcementAccentArticleClass } from "@/lib/announcement-accents";
-import { teacherCloudScopedClassIds } from "@/lib/cloud-teacher-scope";
 import type { MessagingConversationListItem } from "@/lib/data/messaging";
 import type { DashboardDirectorStats } from "@/lib/data/school";
 import { formatCloudClassDisplayName } from "@/lib/format-cloud-class-display-name";
@@ -59,16 +58,6 @@ function classDisplayLabel(c: SchoolClass): string {
   );
 }
 
-function sortClassIds(ids: string[], byId: Map<string, SchoolClass>): string[] {
-  return [...ids].sort((a, b) => {
-    const ca = byId.get(a);
-    const cb = byId.get(b);
-    const la = ca ? classDisplayLabel(ca) : a;
-    const lb = cb ? classDisplayLabel(cb) : b;
-    return la.localeCompare(lb, "fr", { sensitivity: "base" });
-  });
-}
-
 function StatCard({
   label,
   value,
@@ -91,30 +80,6 @@ function StatCard({
   );
 }
 
-function ClassBadgeRow({
-  classIds,
-  classById,
-}: {
-  classIds: string[];
-  classById: Map<string, SchoolClass>;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {classIds.map((cid) => {
-        const c = classById.get(cid);
-        const label = c ? classDisplayLabel(c) : cid;
-        return (
-          <Link key={cid} href={`/classes/${cid}`}>
-            <Badge variant="outline" className="cursor-pointer px-3 py-1">
-              {label}
-            </Badge>
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
 export async function DashboardHome({
   locale,
   user,
@@ -122,7 +87,6 @@ export async function DashboardHome({
   sanctionsPreview,
   sanctionStudentNames,
   directorStats,
-  classesIndex,
   messagingPreview,
   unreadTotal,
   studentClass,
@@ -133,7 +97,6 @@ export async function DashboardHome({
   sanctionsPreview: Sanction[];
   sanctionStudentNames: Record<string, string>;
   directorStats: DashboardDirectorStats | null;
-  classesIndex: SchoolClass[];
   messagingPreview: MessagingConversationListItem[];
   unreadTotal: number;
   studentClass: SchoolClass | null;
@@ -143,8 +106,6 @@ export async function DashboardHome({
   const tNav = await getTranslations({ locale, namespace: "nav" });
   const dateLocale = locale === "fr" ? frLocale : enUS;
   const localeShort = locale === "fr" ? "fr" : "en";
-
-  const classById = new Map(classesIndex.map((c) => [c.id, c]));
 
   const sortedAnnouncements = [...announcements].sort((a, b) => {
     if (a.importance === b.importance) {
@@ -163,23 +124,6 @@ export async function DashboardHome({
   const canCloud =
     hasPermission(user, "UPLOAD_FILES") ||
     hasPermission(user, "ACCESS_STUDENT_CLOUD");
-
-  const principalIdsRaw =
-    user.role === "PROF_PRINCIPAL" ? (user.principalClassIds ?? []) : [];
-  const principalSet = new Set(principalIdsRaw);
-  const assignedAsidePrincipal =
-    user.role === "PROF_PRINCIPAL"
-      ? (user.assignedClassIds ?? []).filter((id) => !principalSet.has(id))
-      : [];
-
-  const principalIdsSorted = sortClassIds(principalIdsRaw, classById);
-  const assignedAsideSorted = sortClassIds(assignedAsidePrincipal, classById);
-
-  const scopedForTeacher = teacherCloudScopedClassIds(user);
-  const professorScopedSorted =
-    user.role === "PROFESSEUR" && scopedForTeacher != null
-      ? sortClassIds(scopedForTeacher, classById)
-      : [];
 
   const studentCloudHref =
     user.role === "ELEVE" && user.studentClassId
@@ -278,70 +222,6 @@ export async function DashboardHome({
             label={t("statsFiles")}
             value={`${directorStats.fileCount}`}
           />
-        </section>
-      ) : null}
-
-      {user.role === "PROF_PRINCIPAL" ? (
-        <section className="grid gap-4 md:grid-cols-2">
-          <Card className="border-primary/20 bg-primary/5 shadow-none">
-            <CardHeader>
-              <CardTitle>{t("principalClassesTitle")}</CardTitle>
-              <CardDescription>{t("principalClassesHint")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {principalIdsSorted.length > 0 ? (
-                <ClassBadgeRow
-                  classIds={principalIdsSorted}
-                  classById={classById}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {t("principalClassesEmpty")}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle>{t("otherTeachingClassesTitle")}</CardTitle>
-              <CardDescription>{t("otherTeachingClassesHint")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {assignedAsideSorted.length > 0 ? (
-                <ClassBadgeRow
-                  classIds={assignedAsideSorted}
-                  classById={classById}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {t("otherTeachingClassesEmpty")}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
-
-      {user.role === "PROFESSEUR" ? (
-        <section>
-          <Card className="shadow-none">
-            <CardHeader>
-              <CardTitle>{t("teacherScopedClassesTitle")}</CardTitle>
-              <CardDescription>{t("teacherScopedClassesHint")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {professorScopedSorted.length > 0 ? (
-                <ClassBadgeRow
-                  classIds={professorScopedSorted}
-                  classById={classById}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {t("teacherScopedClassesEmpty")}
-                </p>
-              )}
-            </CardContent>
-          </Card>
         </section>
       ) : null}
 
@@ -564,12 +444,12 @@ export async function DashboardHome({
               <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle>{t("recentSanctions")}</CardTitle>
-                  <CardDescription className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <span>{t("recentSanctionsHint")}</span>
                     <Badge variant="accent" className="text-[10px] font-semibold uppercase tracking-wide">
                       {t("recentSanctionsLive")}
                     </Badge>
-                  </CardDescription>
+                  </div>
                 </div>
                 <Button variant="outline" size="sm" asChild>
                   <Link href="/sanctions">{t("sanctionsSeeAll")}</Link>

@@ -222,7 +222,7 @@ export async function fetchAnnouncements(): Promise<Announcement[]> {
   return fetchAnnouncementsWithClient(supabase);
 }
 
-/** Annonces visibles sur le tableau de bord : filtrage par audience, sauf pour qui peut publier (direction / admin) qui voit tout le flux. */
+/** Annonces visibles sur le tableau de bord : filtrage par audience, sauf direction / admin (flux complet pour modération). */
 export async function fetchAnnouncementsForUser(
   user: SessionUser,
 ): Promise<Announcement[]> {

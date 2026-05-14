@@ -1126,15 +1126,15 @@
       "pageSubtitle": "Messages and badges appear on each dashboard according to targeting.",
       "whoSeesTitle": "Quick reference — who sees what?",
       "whoSeesAudience": {
-        "ALL_STAFF": "Whole staff",
+        "ALL_STAFF": "Whole school (staff + students)",
         "CLASSROOM_TEACHERS": "Teachers (including head teachers)",
         "HEAD_TEACHERS_ONLY": "Head teachers only",
         "DIRECTION_ONLY": "Leadership / admins only"
       },
       "whoSees": {
-        "ALL_STAFF": "Directors, administrators, head teachers and teachers.",
-        "CLASSROOM_TEACHERS": "Head teachers and classroom teachers only (not admin-only desks).",
-        "HEAD_TEACHERS_ONLY": "Accounts with role « Head teacher » only.",
+        "ALL_STAFF": "Directors and administrators, head teachers, teachers and students.",
+        "CLASSROOM_TEACHERS": "Head teachers and classroom teachers only (not admin-only desks, not students).",
+        "HEAD_TEACHERS_ONLY": "« Head teacher » accounts only.",
         "DIRECTION_ONLY": "Director and « Administrator » accounts only."
       },
       "formTitle": "New announcement",
@@ -1148,16 +1148,16 @@
       "accentHint": "Card tint on the dashboard and Announcements page.",
       "audienceLabel": "Who can see this announcement?",
       "aud": {
-        "ALL_STAFF": "Whole staff",
+        "ALL_STAFF": "Whole school (staff + students)",
         "CLASSROOM_TEACHERS": "Teachers (including head teachers)",
         "HEAD_TEACHERS_ONLY": "Head teachers only",
         "DIRECTION_ONLY": "Leadership & administration only"
       },
       "audHint": {
-        "ALL_STAFF": "All signed-in faculty roles.",
-        "CLASSROOM_TEACHERS": "Head teachers + teachers; excludes director/admin-only desks.",
-        "HEAD_TEACHERS_ONLY": "Only head teachers.",
-        "DIRECTION_ONLY": "Director + Administrator roles only."
+        "ALL_STAFF": "Visible to everyone: leadership, head teachers, teachers and students.",
+        "CLASSROOM_TEACHERS": "Head teachers and teachers only.",
+        "HEAD_TEACHERS_ONLY": "Head teachers only.",
+        "DIRECTION_ONLY": "Director and administrators only."
       },
       "logos": {
         "megaphone": "Megaphone",

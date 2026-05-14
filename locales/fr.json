@@ -1126,16 +1126,16 @@
       "pageSubtitle": "Le message et le logo s’affichent sur le tableau de bord selon la cible.",
       "whoSeesTitle": "Récapitulatif : qui voit quoi ?",
       "whoSeesAudience": {
-        "ALL_STAFF": "Tout le personnel",
+        "ALL_STAFF": "Toute l’établissement (personnel + élèves)",
         "CLASSROOM_TEACHERS": "Les professeurs (y compris PP)",
         "HEAD_TEACHERS_ONLY": "Professeurs principaux uniquement",
         "DIRECTION_ONLY": "Direction / administration uniquement"
       },
       "whoSees": {
-        "ALL_STAFF": "Directeurs, équipe administrative, professeurs principaux et professeurs.",
-        "CLASSROOM_TEACHERS": "Professeurs principaux et professeurs (pas les comptes direction / admin seuls).",
+        "ALL_STAFF": "Direction (directeur, administrateurs), professeurs principaux, professeurs et élèves.",
+        "CLASSROOM_TEACHERS": "Professeurs principaux et professeurs uniquement (pas la direction/admin seule ni les élèves).",
         "HEAD_TEACHERS_ONLY": "Uniquement les comptes « Professeur principal ».",
-        "DIRECTION_ONLY": "Uniquement Directeur et comptes « Administrateur »."
+        "DIRECTION_ONLY": "Uniquement directeur et comptes « Administrateur »."
       },
       "formTitle": "Nouvelle annonce",
       "formSubtitle": "Titre, description, logo et couleur ; choisissez le public autorisé à la lire.",
@@ -1148,16 +1148,16 @@
       "accentHint": "Teinte de la carte sur le tableau de bord et la page Annonces.",
       "audienceLabel": "Qui peut voir cette annonce ?",
       "aud": {
-        "ALL_STAFF": "Tout le personnel",
+        "ALL_STAFF": "Toute l’établissement (personnel + élèves)",
         "CLASSROOM_TEACHERS": "Professeurs (y compris PP)",
         "HEAD_TEACHERS_ONLY": "Professeurs principaux seulement",
         "DIRECTION_ONLY": "Direction et administration seulement"
       },
       "audHint": {
-        "ALL_STAFF": "Tous les rôles connectés (direction, admin, PP, profs).",
-        "CLASSROOM_TEACHERS": "PP + professeurs ; pas la direction / admin seule.",
-        "HEAD_TEACHERS_ONLY": "Réservé aux professeurs principaux.",
-        "DIRECTION_ONLY": "Directeur + rôle Administrateur uniquement."
+        "ALL_STAFF": "Affichée à tout le monde : direction, PP, profs et élèves.",
+        "CLASSROOM_TEACHERS": "PP et professeurs uniquement.",
+        "HEAD_TEACHERS_ONLY": "Professeurs principaux uniquement.",
+        "DIRECTION_ONLY": "Directeur et administrateurs uniquement."
       },
       "logos": {
         "megaphone": "Mégaphone",

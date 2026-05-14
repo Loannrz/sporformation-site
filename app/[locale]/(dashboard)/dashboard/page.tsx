@@ -2,7 +2,6 @@ import { DashboardHome } from "@/components/dashboard/dashboard-home";
 import {
   fetchAnnouncementsForUser,
   fetchClassById,
-  fetchClassesWithStudents,
   fetchDashboardDirectorStats,
   fetchRecentSanctionsForUser,
   fetchStudentDisplayNamesByIds,
@@ -34,7 +33,6 @@ export default async function DashboardPage({
     announcements,
     sanctionsPreview,
     directorStats,
-    classesIndex,
     messagingList,
     studentClass,
   ] = await Promise.all([
@@ -45,9 +43,6 @@ export default async function DashboardPage({
     showEstablishmentStats
       ? fetchDashboardDirectorStats()
       : Promise.resolve(null),
-    user.role !== "ELEVE"
-      ? fetchClassesWithStudents()
-      : Promise.resolve([]),
     hasPermission(user, "SEND_MESSAGES")
       ? fetchMessagingConversationsList(user.id, localeShort)
       : Promise.resolve([]),
@@ -76,7 +71,6 @@ export default async function DashboardPage({
       sanctionsPreview={sanctionsPreview}
       sanctionStudentNames={sanctionStudentNames}
       directorStats={directorStats}
-      classesIndex={classesIndex}
       messagingPreview={messagingPreview}
       unreadTotal={unreadTotal}
       studentClass={studentClass}

@@ -1,6 +1,6 @@
 import { AnnouncementsBulletin } from "@/components/announcements/announcements-bulletin";
 import { PublishAnnouncementDialog } from "@/components/announcements/publish-announcement-dialog";
-import { fetchAnnouncements } from "@/lib/data/school";
+import { fetchAnnouncementsForUser } from "@/lib/data/school";
 import { orderAnnouncementsForBulletin } from "@/lib/announcements-order";
 import { hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
@@ -23,7 +23,7 @@ export default async function AnnouncementsPage({
     user && hasPermission(user, "CREATE_ANNOUNCEMENTS"),
   );
 
-  const raw = await fetchAnnouncements();
+  const raw = user ? await fetchAnnouncementsForUser(user) : [];
   const items = orderAnnouncementsForBulletin(raw);
 
   return (
