@@ -128,6 +128,7 @@
     "statsStudents": "Students",
     "statsClasses": "Classes (current year)",
     "statsFiles": "Cloud files",
+    "statsFilesCount": "{count, plural, one {# file} other {# files}}",
     "recentSanctions": "Recent sanctions",
     "recentSanctionsHint": "Latest discipline entries you’re allowed to see.",
     "recentSanctionsLive": "Live",

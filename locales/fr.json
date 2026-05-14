@@ -128,6 +128,7 @@
     "statsStudents": "Étudiants",
     "statsClasses": "Classes (année en cours)",
     "statsFiles": "Fichiers Cloud",
+    "statsFilesCount": "{count, plural, one {# fichier} other {# fichiers}}",
     "recentSanctions": "Sanctions récentes",
     "recentSanctionsHint": "Signalements récents dans votre périmètre.",
     "recentSanctionsLive": "Temps réel",

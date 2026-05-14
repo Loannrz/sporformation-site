@@ -951,7 +951,77 @@ export type DashboardDirectorStats = {
   /** Classes dont le cycle recouvre l’année civile courante. */
   activeClassCount: number;
   fileCount: number;
+  /**
+   * Taille agrégée des objets bucket « documents » (Storage), si lisible depuis le backend.
+   * null si fonction RPC ou table storage.objects indisponible (droits / migration non passée).
+   */
+  cloudStorageBytesTotal: number | null;
 };
+
+/** Interprète `storage.objects.metadata.size` (nombre ou chaîne décimale). */
+function metadataObjectSizeBytes(meta: unknown): number {
+  if (!meta || typeof meta !== "object") return 0;
+  const m = meta as Record<string, unknown>;
+  const raw = m.size;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) {
+    return Math.min(Math.floor(raw), Number.MAX_SAFE_INTEGER);
+  }
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (t && /^[0-9]+(\.[0-9]+)?$/.test(t))
+      return Math.min(Math.floor(Number(t)), Number.MAX_SAFE_INTEGER);
+  }
+  return 0;
+}
+
+function coerceBigIntLikeToSafeNumber(raw: unknown): number | null {
+  if (typeof raw === "bigint") return Number(raw);
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && /^-?\d+$/.test(raw.trim())) {
+    const n = Number(raw.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+async function fetchCloudDocumentsBucketBytesTotal(
+  supabase: SupabaseClient,
+): Promise<number | null> {
+  const { data: rpcData, error: rpcErr } = await supabase.rpc(
+    "dashboard_documents_storage_bytes_total",
+  );
+  if (!rpcErr && rpcData !== null && rpcData !== undefined) {
+    const n = coerceBigIntLikeToSafeNumber(rpcData);
+    if (n != null && n >= 0) return n;
+  }
+
+  const PAGE = 1000;
+  let offset = 0;
+  let total = 0;
+  try {
+    for (;;) {
+      const { data: rows, error } = await supabase
+        .schema("storage")
+        .from("objects")
+        .select("metadata")
+        .eq("bucket_id", "documents")
+        .range(offset, offset + PAGE - 1);
+      if (error) {
+        if (offset === 0) return null;
+        break;
+      }
+      const chunk = rows ?? [];
+      for (const r of chunk as { metadata?: unknown }[]) {
+        total += metadataObjectSizeBytes(r.metadata);
+      }
+      if (chunk.length < PAGE) break;
+      offset += PAGE;
+    }
+  } catch {
+    return null;
+  }
+  return total;
+}
 
 /**
  * Totaux tableau de bord direction : service_role si dispo, sinon session (peut rester partiel sous RLS).
@@ -962,6 +1032,7 @@ export async function fetchDashboardDirectorStats(): Promise<DashboardDirectorSt
     studentCount: 0,
     activeClassCount: 0,
     fileCount: 0,
+    cloudStorageBytesTotal: null,
   };
   const admin = createAdminSupabase();
   const supabase = admin ?? (await supabaseOrNull());
@@ -969,7 +1040,7 @@ export async function fetchDashboardDirectorStats(): Promise<DashboardDirectorSt
 
   const year = new Date().getFullYear();
 
-  const [profRes, studRes, filesRes] = await Promise.all([
+  const [profRes, studRes, filesRes, cloudBytesTotal] = await Promise.all([
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
@@ -978,6 +1049,7 @@ export async function fetchDashboardDirectorStats(): Promise<DashboardDirectorSt
       ),
     supabase.from("students").select("id", { count: "exact", head: true }),
     supabase.from("files").select("id", { count: "exact", head: true }),
+    fetchCloudDocumentsBucketBytesTotal(supabase),
   ]);
 
   const classRows = await loadAllClassRows(supabase);
@@ -994,6 +1066,12 @@ export async function fetchDashboardDirectorStats(): Promise<DashboardDirectorSt
     studentCount: studRes.error ? 0 : studRes.count ?? 0,
     activeClassCount,
     fileCount: filesRes.error ? 0 : filesRes.count ?? 0,
+    cloudStorageBytesTotal:
+      typeof cloudBytesTotal === "number" &&
+      Number.isFinite(cloudBytesTotal) &&
+      cloudBytesTotal >= 0
+        ? cloudBytesTotal
+        : null,
   };
 }
 

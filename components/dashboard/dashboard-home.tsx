@@ -17,6 +17,11 @@ import { formatCloudClassDisplayName } from "@/lib/format-cloud-class-display-na
 import { canAccessSanctionsHub, hasPermission } from "@/lib/permissions";
 import { isStaffAdmin } from "@/lib/roles";
 import { sanctionTypeLabel } from "@/lib/sanction-labels";
+import {
+  cloudStorageQuotaBorderClassName,
+  cloudStorageQuotaUsageRatio,
+} from "@/lib/cloud-storage-quota-ui";
+import { formatCloudUsedVersusQuota } from "@/lib/format-human-binary-bytes";
 import { cn } from "@/lib/utils";
 import type { AppLocale } from "@/i18n/routing";
 import type { Announcement, Sanction, SchoolClass, SessionUser } from "@/types";
@@ -75,6 +80,38 @@ function StatCard({
           <p className="text-[11px] leading-snug text-muted-foreground">{hint}</p>
         ) : null}
         <CardTitle className="text-3xl">{value}</CardTitle>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function CloudFilesQuotaStatCard({
+  label,
+  filesCountCaption,
+  usedBytesTotal,
+  locale,
+}: {
+  label: string;
+  filesCountCaption: string;
+  usedBytesTotal: number | null;
+  locale: AppLocale;
+}) {
+  const ratio = cloudStorageQuotaUsageRatio(usedBytesTotal);
+  return (
+    <Card
+      className={cn(
+        "bg-gradient-to-br from-card to-muted/40 shadow-soft dark:shadow-soft-dark",
+        cloudStorageQuotaBorderClassName(ratio),
+      )}
+    >
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          {filesCountCaption}
+        </p>
+        <CardTitle className="text-2xl font-semibold leading-snug tracking-tight sm:text-3xl">
+          {formatCloudUsedVersusQuota(usedBytesTotal, locale)}
+        </CardTitle>
       </CardHeader>
     </Card>
   );
@@ -218,9 +255,13 @@ export async function DashboardHome({
             label={t("statsClasses")}
             value={`${directorStats.activeClassCount}`}
           />
-          <StatCard
+          <CloudFilesQuotaStatCard
             label={t("statsFiles")}
-            value={`${directorStats.fileCount}`}
+            filesCountCaption={t("statsFilesCount", {
+              count: directorStats.fileCount,
+            })}
+            usedBytesTotal={directorStats.cloudStorageBytesTotal}
+            locale={locale}
           />
         </section>
       ) : null}
