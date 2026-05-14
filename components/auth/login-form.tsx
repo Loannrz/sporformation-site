@@ -40,13 +40,8 @@ export function LoginForm({ locale, urlErrorMessage }: Props) {
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="locale" value={locale} />
           {mainMessage ? (
-            <div className="space-y-1 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <p>{mainMessage}</p>
-              {state.devDetail ? (
-                <p className="font-mono text-[11px] text-destructive/90 opacity-90">
-                  {t("devDetailLabel")}: {state.devDetail}
-                </p>
-              ) : null}
             </div>
           ) : null}
           <div className="space-y-2">

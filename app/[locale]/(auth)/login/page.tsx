@@ -20,16 +20,11 @@ function resolveLoginError(
   t: Awaited<ReturnType<typeof getTranslations>>,
 ) {
   if (!code) return null;
-  if (code === "config") return t("errorConfig");
-  if (code === "badurl") return t("errorBadUrl");
-  if (code === "need_profile") return t("errorNeedProfile");
-  try {
-    const decoded = decodeURIComponent(code);
-    if (!decoded || decoded === "NEXT_REDIRECT") return t("errorGeneric");
-    return decoded;
-  } catch {
-    return t("errorGeneric");
-  }
+  const normalized = code.toLowerCase().trim();
+  if (normalized === "config") return t("errorConfig");
+  if (normalized === "badurl") return t("errorBadUrl");
+  if (normalized === "need_profile") return t("errorNeedProfile");
+  return t("errorGeneric");
 }
 
 export default async function LoginPage({

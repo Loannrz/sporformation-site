@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import Image from "next/image";
 import { twMerge } from "tailwind-merge";
 
 type Props = {
@@ -8,40 +8,27 @@ type Props = {
   compact?: boolean;
 };
 
-/** Logo wordmark : un id de dégradé unique par instance (évite les conflits si plusieurs SVG dans le DOM). */
+/**
+ * Logo SPORFORMATION (PNG).
+ * - La hauteur est imposée par `className` (ex: `h-8`, `h-10`) → la nav garde sa hauteur.
+ * - La largeur s’adapte automatiquement au ratio natif (728×343 ≈ 2.12:1) via `w-auto`.
+ * - `max-w-full` + `object-contain` permettent au logo de rétrécir si le conteneur est étroit
+ *   (sidebar repliée, mobile) sans déborder ni écraser les autres éléments.
+ */
 export function SporformationLogo({ className, compact }: Props) {
-  const rawId = useId().replace(/:/g, "");
-  const gradId = `spo-grad-${rawId}`;
-
   return (
-    <svg
-      viewBox="0 0 220 40"
-      role="img"
-      aria-label="SPORFORMATION"
-      preserveAspectRatio="xMinYMid meet"
+    <Image
+      src="/sporformation-logo.png"
+      alt="SPORFORMATION"
+      width={728}
+      height={343}
+      priority
+      sizes="(max-width: 768px) 140px, 220px"
       className={twMerge(
-        "h-8 w-auto max-w-[200px] shrink-0",
+        "h-8 w-auto max-w-full shrink-0 object-contain",
         compact && "max-w-[140px]",
         className,
       )}
-    >
-      <defs>
-        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#E63946" />
-          <stop offset="100%" stopColor="#F4A261" />
-        </linearGradient>
-      </defs>
-      <text
-        x="0"
-        y="28"
-        fontSize="22"
-        fontWeight="700"
-        fill={`url(#${gradId})`}
-        /* Pas de var() ici : certains navigateurs mobiles ne l’appliquent pas au <text> SVG. */
-        fontFamily='ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-      >
-        SPORFORMATION
-      </text>
-    </svg>
+    />
   );
 }

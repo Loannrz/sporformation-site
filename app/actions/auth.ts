@@ -29,35 +29,35 @@ function isNetworkLikeAuthMessage(message: string): boolean {
   );
 }
 
-function mapSupabaseAuthError(err: {
-  message: string;
-  status?: number;
-}): { code: string; dev: string | null } {
-  const isDev = process.env.NODE_ENV === "development";
-  const dev = isDev
-    ? [err.message, err.status ? `HTTP ${err.status}` : null]
-        .filter(Boolean)
-        .join(" · ")
-    : null;
-
+/** Messages GoTrue/localisés côté client : on ne renvoie que des codes, jamais de détail brut à l’écran connexion. */
+function mapSupabaseAuthError(err: { message: string; status?: number }): string {
   const m = err.message.toLowerCase();
   if (
     m.includes("invalid login credentials") ||
     m.includes("invalid email or password") ||
-    m.includes("invalid credentials")
+    m.includes("invalid credentials") ||
+    m.includes("user not found")
   ) {
-    return { code: "INVALID_CREDENTIALS", dev };
+    return "INVALID_CREDENTIALS";
+  }
+  if (m.includes("invalid email") || m.includes("unable to validate email")) {
+    return "INVALID_EMAIL_FORMAT";
   }
   if (m.includes("email not confirmed")) {
-    return { code: "EMAIL_NOT_CONFIRMED", dev };
+    return "EMAIL_NOT_CONFIRMED";
   }
-  if (err.status === 429 || m.includes("too many") || m.includes("rate limit")) {
-    return { code: "RATE_LIMITED", dev };
+  if (
+    err.status === 429 ||
+    m.includes("too many") ||
+    m.includes("rate limit") ||
+    m.includes("email rate limit")
+  ) {
+    return "RATE_LIMITED";
   }
-  if (m.includes("user not found") || m.includes("user banned")) {
-    return { code: "ACCOUNT_BLOCKED", dev };
+  if (m.includes("user banned") || m.includes("banned")) {
+    return "ACCOUNT_BLOCKED";
   }
-  return { code: "GENERIC", dev };
+  return "GENERIC";
 }
 
 function isSupabaseUnreachableError(e: unknown): boolean {
@@ -78,14 +78,6 @@ function isSupabaseUnreachableError(e: unknown): boolean {
     );
   }
   return false;
-}
-
-function unreachableDevDetail(e: unknown): string | null {
-  if (process.env.NODE_ENV !== "development") return null;
-  if (!(e instanceof Error)) return String(e);
-  const c = e.cause;
-  if (c instanceof Error) return `${e.message} — ${c.message}`;
-  return e.message;
 }
 
 /**
@@ -200,12 +192,10 @@ export async function signInWithPasswordAction(
       if (isNetworkLikeAuthMessage(error.message)) {
         return {
           errorCode: "BAD_URL",
-          devDetail:
-            process.env.NODE_ENV === "development" ? error.message : null,
+          devDetail: null,
         };
       }
-      const { code, dev } = mapSupabaseAuthError(error);
-      return { errorCode: code, devDetail: dev };
+      return { errorCode: mapSupabaseAuthError(error), devDetail: null };
     }
 
     await recordSignInActivity(signInData?.user?.id ?? null, email);
@@ -213,15 +203,12 @@ export async function signInWithPasswordAction(
     if (isSupabaseUnreachableError(e)) {
       return {
         errorCode: "BAD_URL",
-        devDetail: unreachableDevDetail(e),
+        devDetail: null,
       };
     }
     return {
       errorCode: "GENERIC",
-      devDetail:
-        process.env.NODE_ENV === "development" && e instanceof Error
-          ? e.message
-          : null,
+      devDetail: null,
     };
   }
 
