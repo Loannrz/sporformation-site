@@ -130,6 +130,8 @@ export async function createAnnouncementAdminAction(
       audience,
       title,
       htmlBody: html,
+      logoKey,
+      accentKey,
     });
   } catch (e) {
     console.error("[annonces/email]", e);

@@ -2,14 +2,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveAppOrigin } from "@/lib/email/app-origin";
 import { resolveEmailForAuthUserId } from "@/lib/email/resolve-auth-email";
 import { sendTransactionalEmail } from "@/lib/email/resend-helpers";
+import {
+  accentPalette,
+  escapeHtml,
+  EMAIL_PALETTE,
+  renderEmailShell,
+  renderQuoteBlock,
+  siteCtaLabel,
+} from "@/lib/email/shell";
 import type { AppLocale } from "@/i18n/routing";
 
-function escapeHtml(s: string) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+const PREVIEW_MAX = 360;
+
+function truncatePreview(s: string): string {
+  if (s.length <= PREVIEW_MAX) return s;
+  return s.slice(0, PREVIEW_MAX).trimEnd() + "…";
 }
 
 export async function notifyConversationParticipantsNewMessage(opts: {
@@ -27,32 +34,33 @@ export async function notifyConversationParticipantsNewMessage(opts: {
     .eq("conversation_id", opts.conversationId);
 
   const recipientIds =
-    (parts as { profile_id: string }[] | null)?.map((p) => p.profile_id) ??
-    [];
+    (parts as { profile_id: string }[] | null)?.map((p) => p.profile_id) ?? [];
 
-  const targetIds = recipientIds.filter((id) => id && id !== opts.senderAuthUserId);
+  const targetIds = recipientIds.filter(
+    (id) => id && id !== opts.senderAuthUserId,
+  );
   if (targetIds.length === 0) return;
 
   const origin = resolveAppOrigin();
   const pathLocale = opts.locale === "en" ? "en" : "fr";
   const replyUrl = `${origin}/${pathLocale}/messagerie/${opts.conversationId}`;
+  const inboxUrl = `${origin}/${pathLocale}/messagerie`;
+  const accent = accentPalette("red");
 
-  let preview =
-    opts.bodyPreview.trim().length > 0
-      ? escapeHtml(opts.bodyPreview.trim())
-      : null;
-  if (!preview && opts.hadAttachment) {
-    preview =
-      opts.locale === "en"
-        ? "<em>(Attachment)</em>"
-        : "<em>(Pièce jointe)</em>";
-  }
-  if (!preview) {
-    preview =
-      opts.locale === "en" ? "<em>(Empty message)</em>" : "<em>(Message vide)</em>";
-  }
+  const trimmedPreview = truncatePreview(opts.bodyPreview.trim());
+  const senderName = opts.senderDisplayName.trim() || "—";
 
-  const sender = escapeHtml(opts.senderDisplayName.trim() || "—");
+  const previewHtmlFr = trimmedPreview.length > 0
+    ? escapeHtml(trimmedPreview)
+    : opts.hadAttachment
+      ? `<em style="color:${EMAIL_PALETTE.MUTED};">(Pièce jointe envoyée)</em>`
+      : `<em style="color:${EMAIL_PALETTE.MUTED};">(Message vide)</em>`;
+
+  const previewHtmlEn = trimmedPreview.length > 0
+    ? escapeHtml(trimmedPreview)
+    : opts.hadAttachment
+      ? `<em style="color:${EMAIL_PALETTE.MUTED};">(Attachment shared)</em>`
+      : `<em style="color:${EMAIL_PALETTE.MUTED};">(Empty message)</em>`;
 
   await Promise.all(
     targetIds.map(async (recipientId) => {
@@ -61,23 +69,66 @@ export async function notifyConversationParticipantsNewMessage(opts: {
 
       const subject =
         opts.locale === "en"
-          ? `[SPORFORMATION] New message from ${opts.senderDisplayName.trim() || "someone"}`
-          : `[SPORFORMATION] Nouveau message de ${opts.senderDisplayName.trim() || "un collège"}`;
+          ? `[SPORFORMATION] New message from ${senderName}`
+          : `[SPORFORMATION] Nouveau message de ${senderName}`;
 
-      const htmlFr = `<p>Vous avez reçu un message sur SPORFORMATION.</p>
-<p><strong>De :</strong> ${sender}</p>
-<p><strong>Aperçu :</strong> ${preview}</p>
-<p><a href="${replyUrl}">Ouvrir la conversation et répondre</a></p>`;
+      const quote = renderQuoteBlock({
+        authorLabel: opts.locale === "en" ? "From" : "De",
+        authorName: senderName,
+        bodyHtml: opts.locale === "en" ? previewHtmlEn : previewHtmlFr,
+        accent,
+      });
 
-      const htmlEn = `<p>You have a new message on SPORFORMATION.</p>
-<p><strong>From:</strong> ${sender}</p>
-<p><strong>Preview:</strong> ${preview}</p>
-<p><a href="${replyUrl}">Open conversation and reply</a></p>`;
+      const intro =
+        opts.locale === "en"
+          ? `${senderName} just sent you a new message on SPORFORMATION.`
+          : `${senderName} vient de vous envoyer un nouveau message sur SPORFORMATION.`;
+
+      const title =
+        opts.locale === "en"
+          ? "New message"
+          : "Nouveau message";
+
+      const kicker =
+        opts.locale === "en"
+          ? "Messaging"
+          : "Messagerie";
+
+      const preheader =
+        opts.locale === "en"
+          ? `${senderName}: ${trimmedPreview || (opts.hadAttachment ? "attachment shared" : "empty message")}`
+          : `${senderName} : ${trimmedPreview || (opts.hadAttachment ? "pièce jointe partagée" : "message vide")}`;
+
+      const ctaLabel =
+        opts.locale === "en"
+          ? "Open the conversation"
+          : "Ouvrir la conversation";
+
+      const secondaryLabel =
+        opts.locale === "en"
+          ? "Back to inbox"
+          : "Revenir à la boîte de réception";
+
+      const html = renderEmailShell({
+        locale: opts.locale,
+        preheader,
+        kicker,
+        title,
+        intro,
+        bodyHtml: quote,
+        accent,
+        primaryCta: { url: replyUrl, label: ctaLabel },
+        secondaryCta: { url: inboxUrl, label: secondaryLabel },
+        footerNote:
+          opts.locale === "en"
+            ? `SPORFORMATION — please reply from the platform · ${siteCtaLabel(opts.locale)}.`
+            : `SPORFORMATION — merci de répondre depuis la plateforme · ${siteCtaLabel(opts.locale)}.`,
+      });
 
       await sendTransactionalEmail({
         to: email,
         subject,
-        html: opts.locale === "en" ? htmlEn : htmlFr,
+        html,
       });
     }),
   );
