@@ -7,7 +7,7 @@ import {
   ACTIVITY_CATEGORIES,
   fetchActivityLogsForDirector,
 } from "@/lib/data/activity-logs";
-import { isDirector } from "@/lib/roles";
+import { canAccessActivityHistoryAdmin } from "@/lib/pedago-access";
 import { getSessionUser } from "@/lib/session-server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -17,7 +17,7 @@ export default async function AdminHistoryPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || !isDirector(user)) {
+  if (!user || !canAccessActivityHistoryAdmin(user)) {
     redirectToAccessDenied(params.locale);
   }
 

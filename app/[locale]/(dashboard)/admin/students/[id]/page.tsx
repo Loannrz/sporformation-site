@@ -10,7 +10,8 @@ import {
 } from "@/lib/data/school";
 import { fetchStudentAdminDetail } from "@/lib/data/students-admin";
 import { getSessionUser } from "@/lib/session-server";
-import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { isDirector } from "@/lib/roles";
+import { canAccessStudentAdministration } from "@/lib/pedago-access";
 import { redirectToAccessDenied } from "@/lib/guards";
 import { sanctionsForStudentProfile } from "@/lib/permissions";
 import { getTranslations } from "next-intl/server";
@@ -23,7 +24,7 @@ export default async function AdminStudentDetailPage({
   params: { locale: AppLocale; id: string };
 }) {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canAccessStudentAdministration(user)) {
     redirectToAccessDenied(params.locale);
   }
 

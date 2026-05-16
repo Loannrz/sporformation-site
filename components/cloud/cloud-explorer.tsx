@@ -1,6 +1,6 @@
 "use client";
 
-import { Files, GraduationCap, Search, User, Users } from "lucide-react";
+import { Files, GraduationCap, Search, User, Users, FileText } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
@@ -15,14 +15,18 @@ import type {
   CloudExplorerTeacherFolder,
   CloudStudentUploadOption,
 } from "@/lib/data/school";
+import type { TeacherOnboardingCloudFile } from "@/lib/data/teacher-documents";
 import type { AppLocale } from "@/i18n/routing";
 import type { CloudClassSelectOption } from "./cloud-upload-document-button";
 import { CloudExplorerAllDocuments } from "./cloud-explorer-all-documents";
+import { CloudExplorerMyTeacherDocs } from "./cloud-explorer-my-teacher-docs";
+import type { SessionUser } from "@/types";
 
-type ExplorerTab = "class" | "teacher" | "student" | "all";
+type ExplorerTab = "class" | "teacher" | "student" | "all" | "myTeacherDocs";
 
 type Props = {
   locale: AppLocale;
+  viewer: SessionUser;
   viewerId: string;
   viewerIsDirector: boolean;
   /** Masquer la recherche globale (enseignants dans leur périmètre). */
@@ -37,6 +41,7 @@ type Props = {
   teacherFolders: CloudExplorerTeacherFolder[];
   studentFolders: CloudExplorerStudentFolder[];
   allDocuments: CloudExplorerFileWithUrl[];
+  myTeacherDocuments: TeacherOnboardingCloudFile[];
 };
 
 function matchesQuery(text: string, query: string): boolean {
@@ -48,6 +53,7 @@ function matchesQuery(text: string, query: string): boolean {
 /** Explorateur Cloud : recherche et cartes par onglet. */
 export function CloudExplorer({
   locale,
+  viewer,
   viewerId,
   viewerIsDirector,
   hideExplorerSearch = false,
@@ -59,6 +65,7 @@ export function CloudExplorer({
   teacherFolders,
   studentFolders,
   allDocuments,
+  myTeacherDocuments,
 }: Props) {
   const t = useTranslations("cloud");
   const resolvedInitialTab = useMemo(() => {
@@ -143,7 +150,7 @@ export function CloudExplorer({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={
-                tab === "all"
+                tab === "all" || tab === "myTeacherDocs"
                   ? t("explorerSearchPlaceholderDocs")
                   : t("explorerSearchPlaceholder")
               }
@@ -164,8 +171,8 @@ export function CloudExplorer({
           className={cn(
             "grid h-auto min-h-11 w-full gap-1 rounded-xl border border-border/50 bg-muted/50 p-1.5 backdrop-blur-sm dark:bg-muted/40 sm:min-h-12",
             showTeacherExplorerTab
-              ? "grid-cols-2 sm:grid-cols-4"
-              : "grid-cols-2 sm:grid-cols-3",
+              ? "grid-cols-2 sm:grid-cols-5"
+              : "grid-cols-2 sm:grid-cols-4",
           )}
         >
           <TabsTrigger
@@ -197,6 +204,13 @@ export function CloudExplorer({
           >
             <Files className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
             <span className="truncate">{t("tabsAllDocuments")}</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="myTeacherDocs"
+            className="gap-1.5 rounded-lg px-2 text-[11px] data-[state=active]:border data-[state=active]:border-border/60 data-[state=active]:bg-card data-[state=active]:shadow-md sm:gap-2 sm:text-sm"
+          >
+            <FileText className="h-3.5 w-3.5 shrink-0 opacity-80 sm:h-4 sm:w-4" />
+            <span className="truncate">{t("tabsMyTeacherDocs")}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -278,6 +292,14 @@ export function CloudExplorer({
             viewerIsDirector={viewerIsDirector}
             classOptions={classOptions}
             studentOptions={studentOptions}
+          />
+        </TabsContent>
+
+        <TabsContent value="myTeacherDocs" className="mt-0 focus-visible:outline-none">
+          <CloudExplorerMyTeacherDocs
+            user={viewer}
+            files={myTeacherDocuments}
+            searchQuery={query}
           />
         </TabsContent>
       </Tabs>

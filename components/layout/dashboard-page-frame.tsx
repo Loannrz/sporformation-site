@@ -41,6 +41,7 @@ const NAV_KEYS = new Set<BreadcrumbLabelKey>([
   "adminAccounts",
   "adminClasses",
   "adminStudents",
+  "adminLeadForms",
 ]);
 
 export function DashboardPageFrame({ children, className }: Props) {

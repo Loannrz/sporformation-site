@@ -5,7 +5,7 @@ import { fetchAnnouncements } from "@/lib/data/school";
 import { orderAnnouncementsForBulletin } from "@/lib/announcements-order";
 import { redirectToAccessDenied } from "@/lib/guards";
 import { hasPermission } from "@/lib/permissions";
-import { isStaffAdmin } from "@/lib/roles";
+import { canAccessInternalAnnouncementsAdmin } from "@/lib/pedago-access";
 import { getSessionUser } from "@/lib/session-server";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
@@ -21,7 +21,7 @@ export default async function AdminAnnouncementsPage({
   const user = await getSessionUser();
   if (
     !user ||
-    !isStaffAdmin(user) ||
+    !canAccessInternalAnnouncementsAdmin(user) ||
     !hasPermission(user, "CREATE_ANNOUNCEMENTS")
   ) {
     redirectToAccessDenied(params.locale);

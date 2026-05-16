@@ -1,8 +1,11 @@
 import type { SessionUser } from "@/types";
+import { pedagoNavAllows } from "@/lib/pedago-access";
 
-/** Accès Cloud « tout l’établissement » : direction et administration. */
+/** Accès Cloud « tout l’établissement » : direction, administration, pédago (si autorisé). */
 export function viewerHasEstablishmentCloudScope(user: SessionUser): boolean {
-  return user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR";
+  if (user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR") return true;
+  if (user.role === "PEDAGO" && pedagoNavAllows(user, "cloud")) return true;
+  return false;
 }
 
 /**

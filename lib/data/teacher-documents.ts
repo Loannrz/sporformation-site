@@ -1,0 +1,224 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import type { SessionUser } from "@/types";
+import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { normalizeCloudDocumentAudience } from "@/lib/cloud-document-audience";
+import {
+  attachSignedUrlsToCloudFiles,
+  type CloudFolderFileRow,
+} from "@/lib/data/school";
+
+export type TeacherDocumentTemplateRow = {
+  id: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+  active: boolean;
+  applies_to_new_teachers: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TeacherDocumentRequestRow = {
+  id: string;
+  teacher_profile_id: string;
+  template_id: string | null;
+  label: string;
+  description: string | null;
+  sort_order: number;
+  file_id: string | null;
+  created_at: string;
+};
+
+export async function fetchTeacherDocumentTemplates(
+  admin: SupabaseClient,
+): Promise<TeacherDocumentTemplateRow[]> {
+  const { data, error } = await admin
+    .from("teacher_document_templates")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error || !data) return [];
+  return data as TeacherDocumentTemplateRow[];
+}
+
+export async function fetchTeacherDocumentRequestsForProfile(
+  admin: SupabaseClient,
+  teacherProfileId: string,
+): Promise<TeacherDocumentRequestRow[]> {
+  const { data, error } = await admin
+    .from("teacher_document_requests")
+    .select("*")
+    .eq("teacher_profile_id", teacherProfileId)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error || !data) return [];
+  return data as TeacherDocumentRequestRow[];
+}
+
+export type TeacherOnboardingRow = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  base_role: string;
+  teacher_employment_status: string | null;
+  teacher_documents_bundle_submitted_at: string | null;
+  teacher_documents_approved_at: string | null;
+};
+
+/** Nouvelles recrues sans accès complet. */
+export async function fetchPendingTeacherDocumentsProfiles(
+  admin: SupabaseClient,
+): Promise<TeacherOnboardingRow[]> {
+  const { data, error } = await admin
+    .from("profiles")
+    .select(
+      "id,first_name,last_name,email,base_role,teacher_employment_status,teacher_documents_bundle_submitted_at,teacher_documents_approved_at",
+    )
+    .in("base_role", ["PROFESSEUR", "PROF_PRINCIPAL"])
+    .eq("teacher_employment_status", "NEW_TO_SCHOOL")
+    .is("teacher_documents_approved_at", null)
+    .order("last_name", { ascending: true });
+
+  if (error || !data) return [];
+  return data as TeacherOnboardingRow[];
+}
+
+/**
+ * Accès dossiers validés par la direction (`teacher_documents_approved_at`).
+ * Ne pas exiger de lignes dans `teacher_document_requests` : après migration ou
+ * validation sans parcours demandes, le profil peut être approuvé sans cette table.
+ */
+export async function fetchValidatedTeacherDocumentsProfiles(
+  admin: SupabaseClient,
+): Promise<TeacherOnboardingRow[]> {
+  const { data, error } = await admin
+    .from("profiles")
+    .select(
+      "id,first_name,last_name,email,base_role,teacher_employment_status,teacher_documents_bundle_submitted_at,teacher_documents_approved_at",
+    )
+    .in("base_role", ["PROFESSEUR", "PROF_PRINCIPAL"])
+    .not("teacher_documents_approved_at", "is", null)
+    .order("teacher_documents_approved_at", {
+      ascending: false,
+      nullsFirst: false,
+    })
+    .limit(1000);
+
+  if (error || !data) return [];
+
+  return (data as TeacherOnboardingRow[]).filter(
+    (row) => row.teacher_documents_approved_at != null,
+  );
+}
+
+/** @deprecated utiliser fetchPendingTeacherDocumentsProfiles */
+export async function fetchTeachersForDocumentsAdmin(
+  admin: SupabaseClient,
+): Promise<TeacherOnboardingRow[]> {
+  return fetchPendingTeacherDocumentsProfiles(admin);
+}
+
+export type TeacherOnboardingCloudFile = CloudFolderFileRow & {
+  signedUrl: string | null;
+  requestLabel: string;
+  requestId: string;
+  teacherProfileId: string;
+  teacherDisplayName: string;
+};
+
+export async function fetchTeacherOnboardingFilesForCloud(
+  viewer: SessionUser,
+): Promise<TeacherOnboardingCloudFile[]> {
+  if (viewer.role === "ELEVE") return [];
+
+  const admin = createAdminSupabase();
+  if (!admin) return [];
+
+  const directorScope = isDirector(viewer) || isStaffAdmin(viewer);
+
+  const { data: rows, error } = await admin
+    .from("teacher_document_requests")
+    .select("id, label, teacher_profile_id, file_id")
+    .not("file_id", "is", null);
+
+  if (error || !rows?.length) return [];
+
+  const scoped = directorScope
+    ? rows
+    : rows.filter((r) => r.teacher_profile_id === viewer.id);
+
+  if (!scoped.length) return [];
+
+  const fileIds = scoped
+    .map((r) => r.file_id as string)
+    .filter((x): x is string => Boolean(x));
+  const teacherIds = [
+    ...new Set(
+      scoped.map((r) => r.teacher_profile_id as string).filter(Boolean),
+    ),
+  ];
+
+  const [{ data: fileRows }, { data: profRows }] = await Promise.all([
+    admin.from("files").select("*").in("id", fileIds),
+    admin.from("profiles").select("id, first_name, last_name").in("id", teacherIds),
+  ]);
+
+  const fileMap = new Map((fileRows ?? []).map((f) => [f.id as string, f]));
+  const nameMap = new Map(
+    (profRows ?? []).map((p) => [
+      p.id as string,
+      `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "—",
+    ]),
+  );
+
+  const pairList: {
+    req: (typeof scoped)[number];
+    row: CloudFolderFileRow;
+  }[] = [];
+
+  for (const r of scoped) {
+    const fid = r.file_id as string;
+    const f = fileMap.get(fid);
+    if (!f) continue;
+    const tid = r.teacher_profile_id as string;
+    pairList.push({
+      req: r,
+      row: {
+        id: fid,
+        title: (f.title as string)?.trim() || (r.label as string),
+        description: (f.description as string) ?? "",
+        mime: (f.mime as string | null) ?? null,
+        createdAt: new Date(f.created_at as string).toISOString(),
+        version: 1,
+        cloudAudience: normalizeCloudDocumentAudience(
+          f.cloud_audience as string,
+        ),
+        classId: (f.class_id as string | null) ?? null,
+        ownerId: (f.owner_id as string | null) ?? null,
+        studentId: (f.student_id as string | null) ?? null,
+        classFolderId: (f.class_folder_id as string | null) ?? null,
+        storagePath: (f.current_path as string) || null,
+      },
+    });
+  }
+
+  if (!pairList.length) return [];
+
+  const withUrls = await attachSignedUrlsToCloudFiles(pairList.map((p) => p.row));
+
+  return pairList.map((p, i) => {
+    const u = withUrls[i];
+    const tid = p.req.teacher_profile_id as string;
+    return {
+      ...u,
+      requestLabel: p.req.label as string,
+      requestId: p.req.id as string,
+      teacherProfileId: tid,
+      teacherDisplayName: nameMap.get(tid) ?? "—",
+    };
+  });
+}

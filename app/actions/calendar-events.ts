@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppLocale } from "@/i18n/routing";
 import { hasPermission } from "@/lib/permissions";
-import { isStaffAdmin } from "@/lib/roles";
+import { isDirector } from "@/lib/roles";
+import { canManageSchoolCalendarAsStaff } from "@/lib/pedago-access";
 import { getSessionUser } from "@/lib/session-server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -192,7 +193,7 @@ export async function createSchoolCalendarEventAction(
   },
 ) {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canManageSchoolCalendarAsStaff(user)) {
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
 
@@ -410,7 +411,7 @@ export async function updateCalendarEventAction(
 
   const isPersonal = !!row.personal;
   const isOwner = row.created_by === user.id;
-  const canEditSchool = !isPersonal && isStaffAdmin(user);
+  const canEditSchool = !isPersonal && canManageSchoolCalendarAsStaff(user);
   if (!((isPersonal && isOwner) || canEditSchool)) {
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
@@ -513,7 +514,7 @@ export async function deleteCalendarEventAction(
 
   const isPersonal = !!row.personal;
   const isOwner = row.created_by === user.id;
-  const canDeleteSchool = !isPersonal && isStaffAdmin(user);
+  const canDeleteSchool = !isPersonal && canManageSchoolCalendarAsStaff(user);
 
   if (!((isPersonal && isOwner) || canDeleteSchool)) {
     return { ok: false as const, error: "FORBIDDEN" as const };

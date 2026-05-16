@@ -4,6 +4,7 @@ export type UserRole =
   | "ADMINISTRATEUR"
   | "PROF_PRINCIPAL"
   | "PROFESSEUR"
+  | "PEDAGO"
   | "ELEVE";
 
 /** Statut d’affectation (fiche enseignant). */
@@ -12,12 +13,39 @@ export type TeacherEmploymentStatus =
   | "NEW_TO_SCHOOL"
   | "FORMER_INACTIVE";
 
+/** Drapeaux navigation (comptes pédago). */
+export type PedagoNavFlagKey =
+  | "dashboard"
+  | "announcements"
+  | "cloud"
+  | "messaging"
+  | "classes"
+  | "calendar"
+  | "sanctionsHub"
+  | "disciplineWarning";
+
+/** Drapeaux administration (comptes pédago). */
+export type PedagoAdminFlagKey =
+  | "adminClasses"
+  | "adminTeacherAccounts"
+  | "adminStudents"
+  | "adminCalendar"
+  | "adminAnnouncements"
+  | "adminSanctions"
+  | "adminLeadForms"
+  | "adminHistory"
+  | "adminStaffDirectory";
+
 export interface SessionUser {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
   role: UserRole;
+  /** Résolu pour `role === "PEDAGO"`. */
+  pedagoNav?: Record<PedagoNavFlagKey, boolean>;
+  /** Résolu pour `role === "PEDAGO"`. */
+  pedagoAdmin?: Record<PedagoAdminFlagKey, boolean>;
   avatarUrl?: string;
   bio?: string;
   subjects?: string[];
@@ -28,6 +56,13 @@ export interface SessionUser {
   /** Anciens comptes : premier mot de passe imposé après OTP ; nouveaux flux : inscription « Créer mon compte ». */
   mustSetPassword?: boolean;
   teacherEmploymentStatus?: TeacherEmploymentStatus;
+  /** Timestamps ISO (profil) — onboarding documents recrue. */
+  teacherDocumentsApprovedAt?: string | null;
+  teacherDocumentsBundleSubmittedAt?: string | null;
+  /** Nombre de pièces demandées (lignes `teacher_document_requests`). */
+  teacherDocumentRequestCount?: number;
+  /** Pré-calculé : accès restreint à `/documents-a-fournir` (aligné middleware). */
+  teacherDocumentsGateActive?: boolean;
   /** Si `role === "ELEVE"` : ligne `students` liée au compte (auth.users). */
   studentId?: string | null;
   /** Classe de l'élève (accès Cloud restreint). */

@@ -1,4 +1,5 @@
 import type { PermissionKey, Sanction, SessionUser } from "@/types";
+import { pedagoHasPermission } from "@/lib/pedago-access";
 
 const directorAllows: Partial<Record<PermissionKey, true>> = {
   CREATE_TEACHER_ACCOUNTS: true,
@@ -67,6 +68,7 @@ export function hasPermission(user: SessionUser | null, key: PermissionKey) {
   if (user.role === "ELEVE") {
     return key === "ACCESS_STUDENT_CLOUD" || key === "SEND_MESSAGES";
   }
+  if (user.role === "PEDAGO") return pedagoHasPermission(user, key);
   if (user.role === "DIRECTEUR") return directorAllows[key] === true;
   if (user.role === "ADMINISTRATEUR") return administratorAllows[key] === true;
   if (user.role === "PROF_PRINCIPAL") return principalAllows[key] === true;
@@ -89,6 +91,9 @@ export function canRemoveSanction(
   studentClassId: string | undefined,
 ) {
   if (!user || sanction.status === "retired") return false;
+  if (user.role === "PEDAGO") {
+    return hasPermission(user, "REMOVE_ANY_SANCTION");
+  }
   if (user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR") {
     return directorAllows.REMOVE_ANY_SANCTION === true;
   }
@@ -101,7 +106,9 @@ export function canRemoveSanction(
 
 export function canViewRemovedHistory(user: SessionUser | null) {
   return Boolean(
-    user?.role === "DIRECTEUR" || user?.role === "ADMINISTRATEUR",
+    user?.role === "DIRECTEUR" ||
+      user?.role === "ADMINISTRATEUR" ||
+      (user?.role === "PEDAGO" && pedagoHasPermission(user, "VIEW_FULL_SANCTION_HISTORY")),
   );
 }
 
@@ -111,6 +118,9 @@ export function canDownloadSanctionPdf(
 ) {
   if (!user) return false;
   if (user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR") {
+    return true;
+  }
+  if (user.role === "PEDAGO" && hasPermission(user, "VIEW_SANCTIONS")) {
     return true;
   }
   if (user.role === "PROF_PRINCIPAL") {

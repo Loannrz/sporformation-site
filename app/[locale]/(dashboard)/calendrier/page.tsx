@@ -1,6 +1,9 @@
 import { CalendarPageClient } from "@/components/calendar/calendar-page-client";
 import { fetchCalendarEventsVisibleToUser } from "@/lib/data/calendar";
-import { isStaffAdmin } from "@/lib/roles";
+import {
+  canManageSchoolCalendarAsStaff,
+  enforcePedagoNav,
+} from "@/lib/pedago-access";
 import { getSessionUser } from "@/lib/session-server";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
@@ -22,6 +25,8 @@ export default async function CalendarPage({
     return null;
   }
 
+  enforcePedagoNav(user, params.locale, "calendar");
+
   const events = await fetchCalendarEventsVisibleToUser(user);
 
   return (
@@ -35,7 +40,7 @@ export default async function CalendarPage({
       <CalendarPageClient
         locale={params.locale}
         userId={user.id}
-        canManageSchool={isStaffAdmin(user)}
+        canManageSchool={canManageSchoolCalendarAsStaff(user)}
         events={events}
       />
     </div>

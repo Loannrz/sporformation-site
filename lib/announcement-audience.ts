@@ -13,7 +13,11 @@ export function viewerSeesAnnouncement(
     case "HEAD_TEACHERS_ONLY":
       return role === "PROF_PRINCIPAL";
     case "CLASSROOM_TEACHERS":
-      return role === "PROFESSEUR" || role === "PROF_PRINCIPAL";
+      return (
+        role === "PROFESSEUR" ||
+        role === "PROF_PRINCIPAL" ||
+        role === "PEDAGO"
+      );
     default:
       return true;
   }

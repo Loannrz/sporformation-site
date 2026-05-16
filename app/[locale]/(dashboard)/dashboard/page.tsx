@@ -9,6 +9,7 @@ import {
 import { fetchMessagingConversationsList } from "@/lib/data/messaging";
 import { canAccessSanctionsHub, hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
+import { enforcePedagoNav } from "@/lib/pedago-access";
 import type { AppLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,8 @@ export default async function DashboardPage({
   if (!user) {
     return null;
   }
+
+  enforcePedagoNav(user, locale, "dashboard");
 
   const localeShort = locale === "fr" ? "fr" : "en";
   const showEstablishmentStats =

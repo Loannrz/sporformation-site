@@ -4,7 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { fetchAdminClassOptions } from "@/lib/data/school";
 import { fetchStaffByIdForAdmin } from "@/lib/data/staff-admin";
 import { getSessionUser } from "@/lib/session-server";
-import { isStaffAdmin } from "@/lib/roles";
+import { canManageTeacherAccounts, isStaffAdmin } from "@/lib/roles";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import {
+  fetchTeacherDocumentRequestsForProfile,
+  fetchTeacherDocumentTemplates,
+} from "@/lib/data/teacher-documents";
+import { TeacherDocumentRequestsEditor } from "@/components/admin/teacher-document-requests-editor";
 import { redirectToAccessDenied } from "@/lib/guards";
 import { cn } from "@/lib/utils";
 import { getTranslations } from "next-intl/server";
@@ -12,6 +18,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
 import { ExternalLink, Mail } from "lucide-react";
+import type { ReactNode } from "react";
 import type { TeacherEmploymentStatus } from "@/types";
 
 export default async function AdminTeacherDetailPage({
@@ -79,6 +86,39 @@ export default async function AdminTeacherDetailPage({
   };
 
   const emp = employmentBadge(staff.teacherEmploymentStatus);
+
+  let teacherDocsSection: ReactNode = null;
+  if (
+    (staff.role === "PROFESSEUR" || staff.role === "PROF_PRINCIPAL") &&
+    canManageTeacherAccounts(viewer)
+  ) {
+    const admin = createAdminSupabase();
+    if (admin) {
+      const [tpls, reqs] = await Promise.all([
+        fetchTeacherDocumentTemplates(admin),
+        fetchTeacherDocumentRequestsForProfile(admin, staff.id),
+      ]);
+      teacherDocsSection = (
+        <div className="mb-10">
+          <TeacherDocumentRequestsEditor
+            locale={params.locale}
+            teacherProfileId={staff.id}
+            viewerRole={viewer.role}
+            canManageAccounts={canManageTeacherAccounts(viewer)}
+            documentsApproved={Boolean(staff.teacherDocumentsApprovedAt)}
+            requests={reqs.map((r) => ({
+              id: r.id,
+              label: r.label,
+              file_id: r.file_id,
+            }))}
+            templates={tpls
+              .filter((tpl) => tpl.active)
+              .map((tpl) => ({ id: tpl.id, label: tpl.label }))}
+          />
+        </div>
+      );
+    }
+  }
 
   return (
     <div className="space-y-10">
@@ -157,6 +197,7 @@ export default async function AdminTeacherDetailPage({
             <p className="mb-8 max-w-prose text-sm leading-relaxed text-muted-foreground">
               {ta("manageCardHint")}
             </p>
+            {teacherDocsSection}
             <TeacherAdminPanel
               locale={params.locale}
               staff={staff}

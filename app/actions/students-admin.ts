@@ -15,13 +15,14 @@ import {
   type StudentExtendedColumn,
 } from "@/lib/students-extended-fields";
 import { getSessionUser } from "@/lib/session-server";
-import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { isDirector } from "@/lib/roles";
+import { canAccessStudentAdministration } from "@/lib/pedago-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
-async function requireStaffAdmin() {
+async function requireStudentAdministration() {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canAccessStudentAdministration(user)) {
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
   return { ok: true as const, user };
@@ -180,7 +181,7 @@ export async function createStudentAction(
   locale: AppLocale,
   input: StudentFullInput,
 ) {
-  const gate = await requireStaffAdmin();
+  const gate = await requireStudentAdministration();
   if (!gate.ok) return { ok: false as const, error: gate.error };
 
   const admin = createAdminSupabase();
@@ -227,7 +228,7 @@ export async function updateStudentAction(
   studentId: string,
   input: StudentFullInput,
 ) {
-  const gate = await requireStaffAdmin();
+  const gate = await requireStudentAdministration();
   if (!gate.ok) return { ok: false as const, error: gate.error };
 
   const admin = createAdminSupabase();

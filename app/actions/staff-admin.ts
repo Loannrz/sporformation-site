@@ -324,6 +324,38 @@ async function findAuthUserIdByEmail(
   return null;
 }
 
+async function seedNewTeacherDocumentRequestsFromTemplates(
+  admin: SupabaseClient,
+  profileId: string,
+  role: UserRole,
+  employmentStatus: TeacherEmploymentStatus,
+): Promise<void> {
+  if (employmentStatus !== "NEW_TO_SCHOOL") return;
+  if (role !== "PROFESSEUR" && role !== "PROF_PRINCIPAL") return;
+
+  const { data: templates, error } = await admin
+    .from("teacher_document_templates")
+    .select("id, label, description, sort_order")
+    .eq("active", true)
+    .eq("applies_to_new_teachers", true)
+    .order("sort_order", { ascending: true });
+
+  if (error || !templates?.length) return;
+
+  const rows = templates.map((t, i) => ({
+    teacher_profile_id: profileId,
+    template_id: t.id as string,
+    label: String(t.label),
+    description: (t.description as string | null) ?? null,
+    sort_order: typeof t.sort_order === "number" ? t.sort_order : i,
+  }));
+
+  const { error: insErr } = await admin.from("teacher_document_requests").insert(rows);
+  if (insErr && process.env.NODE_ENV === "development") {
+    console.warn("teacher_document_requests seed:", insErr.message);
+  }
+}
+
 type TeacherProfileInsertInput = {
   id: string;
   email: string;
@@ -396,10 +428,22 @@ async function insertTeacherProfileRow(
     };
     const { error: legacyErr } = await admin.from("profiles").insert(legacyRow);
     if (legacyErr) return { ok: false, error: legacyErr.message };
+    await seedNewTeacherDocumentRequestsFromTemplates(
+      admin,
+      input.id,
+      input.role,
+      input.employmentStatus,
+    );
     return { ok: true };
   }
 
   if (pErr) return { ok: false, error: pErr.message };
+  await seedNewTeacherDocumentRequestsFromTemplates(
+    admin,
+    input.id,
+    input.role,
+    input.employmentStatus,
+  );
   return { ok: true };
 }
 
@@ -429,6 +473,10 @@ export async function createTeacherAction(
   if (!gate.ok) return { ok: false as const, error: gate.error };
 
   if (input.role === "DIRECTEUR") {
+    return { ok: false as const, error: "INVALID_ROLE" as const };
+  }
+
+  if (input.role === "PEDAGO") {
     return { ok: false as const, error: "INVALID_ROLE" as const };
   }
 

@@ -40,11 +40,14 @@ function initials(firstName: string, lastName: string) {
 type Props = {
   locale: AppLocale;
   initial: ClassAdminDetail;
+  /** Suppression de classe : réservée au directeur (pédago peut gérer la fiche sans supprimer). */
+  canDeleteClass?: boolean;
 };
 
 export function ClassAdminDetailForm({
   locale,
   initial,
+  canDeleteClass = true,
 }: Props) {
   const router = useRouter();
   const t = useTranslations("admin.classManage");
@@ -265,6 +268,7 @@ export function ClassAdminDetailForm({
         )}
       </section>
 
+      {canDeleteClass ? (
       <section className="rounded-2xl border border-destructive/35 bg-gradient-to-br from-destructive/[0.06] to-transparent p-5 shadow-sm dark:from-destructive/10">
         <h2 className="text-lg font-semibold text-destructive">
           {t("deleteClass")}
@@ -298,6 +302,7 @@ export function ClassAdminDetailForm({
           </AlertDialogContent>
         </AlertDialog>
       </section>
+      ) : null}
     </div>
   );
 }

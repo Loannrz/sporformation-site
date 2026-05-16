@@ -8,8 +8,13 @@ import { redirect } from "@/i18n/navigation";
 import { hasPermission } from "@/lib/permissions";
 import { fetchDisciplineDialogOptions } from "@/lib/data/school";
 import { fetchTotalUnreadMessageCount } from "@/lib/data/messaging";
-import { isStaffAdmin } from "@/lib/roles";
+import { isDirector } from "@/lib/roles";
 import { fetchAdminSanctionsNewCount } from "@/lib/data/sanctions-admin";
+import { fetchSiteLeadPendingTotal } from "@/lib/data/site-lead-forms";
+import {
+  canManageLeadForms,
+  canManageSanctionsHubAsStaff,
+} from "@/lib/pedago-access";
 
 export default async function DashboardGroupLayout({
   children,
@@ -20,18 +25,27 @@ export default async function DashboardGroupLayout({
 }) {
   const user = await getSessionUser();
   if (user) {
-    const disciplineOptions = hasPermission(user, "ADD_SANCTION")
-      ? await fetchDisciplineDialogOptions()
-      : null;
+    const gateDocs = user.teacherDocumentsGateActive === true;
+
+    const disciplineOptions =
+      !gateDocs && hasPermission(user, "ADD_SANCTION")
+        ? await fetchDisciplineDialogOptions()
+        : null;
 
     const messagingUnread =
-      hasPermission(user, "SEND_MESSAGES")
+      !gateDocs && hasPermission(user, "SEND_MESSAGES")
         ? await fetchTotalUnreadMessageCount(user.id)
         : 0;
 
     const sanctionsReminderCount =
-      isStaffAdmin(user)
+      !gateDocs && canManageSanctionsHubAsStaff(user)
         ? await fetchAdminSanctionsNewCount(user.id)
+        : 0;
+
+    const leadFormsPendingCount =
+      !gateDocs &&
+      (isDirector(user) || canManageLeadForms(user))
+        ? await fetchSiteLeadPendingTotal()
         : 0;
 
     return (
@@ -40,6 +54,7 @@ export default async function DashboardGroupLayout({
         disciplineOptions={disciplineOptions}
         notificationCount={messagingUnread}
         sanctionsReminderCount={sanctionsReminderCount}
+        leadFormsPendingCount={leadFormsPendingCount}
         locale={params.locale}
       >
         {children}

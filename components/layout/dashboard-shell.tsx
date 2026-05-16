@@ -13,6 +13,7 @@ export function DashboardShell({
   children,
   notificationCount = 0,
   sanctionsReminderCount = 0,
+  leadFormsPendingCount = 0,
   disciplineOptions = null,
   locale,
 }: {
@@ -22,6 +23,8 @@ export function DashboardShell({
   notificationCount?: number;
   /** Badge hub sanctions / pastille avertissement (personnel administration). */
   sanctionsReminderCount?: number;
+  /** Demandes formulaire vitrine non traitées (directeur uniquement). */
+  leadFormsPendingCount?: number;
   disciplineOptions?: DisciplineDialogOptions | null;
   locale: AppLocale;
 }) {
@@ -33,6 +36,7 @@ export function DashboardShell({
         user={user}
         notificationCount={notificationCount}
         sanctionsReminderCount={sanctionsReminderCount}
+        leadFormsPendingCount={leadFormsPendingCount}
         disciplineOptions={disciplineOptions}
       />
       <div className="flex min-h-screen flex-1 flex-col lg:overflow-x-hidden">

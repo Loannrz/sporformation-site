@@ -7,8 +7,9 @@ import {
   fetchPendingTeacherInvitesForAdmin,
 } from "@/lib/data/staff-admin";
 import { getSessionUser } from "@/lib/session-server";
-import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { isDirector } from "@/lib/roles";
 import { redirectToAccessDenied } from "@/lib/guards";
+import { canAccessStaffDirectoryAdmin } from "@/lib/pedago-access";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -18,7 +19,7 @@ export default async function AdminAccountsPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canAccessStaffDirectoryAdmin(user)) {
     redirectToAccessDenied(params.locale);
   }
 

@@ -21,7 +21,11 @@ export function isDirectorOnlyAction(user: SessionUser | null): boolean {
 
 /** Rôles élevés pouvant gérer les comptes enseignants (sans tout le périmètre directeur). */
 export function canManageTeacherAccounts(user: SessionUser | null): boolean {
-  return isDirector(user) || user?.role === "ADMINISTRATEUR";
+  if (!user) return false;
+  if (isDirector(user) || user.role === "ADMINISTRATEUR") return true;
+  if (user.role === "PEDAGO" && user.pedagoAdmin?.adminTeacherAccounts !== false)
+    return true;
+  return false;
 }
 
 export function isStudentUser(user: SessionUser | null): boolean {
@@ -35,7 +39,8 @@ export function canViewStaffDirectoryProfiles(user: SessionUser | null): boolean
     user.role === "PROFESSEUR" ||
     user.role === "PROF_PRINCIPAL" ||
     user.role === "DIRECTEUR" ||
-    user.role === "ADMINISTRATEUR"
+    user.role === "ADMINISTRATEUR" ||
+    user.role === "PEDAGO"
   );
 }
 
@@ -51,6 +56,7 @@ export function profileRoleToUserRole(raw: string): UserRole {
     raw === "ADMINISTRATEUR" ||
     raw === "PROF_PRINCIPAL" ||
     raw === "PROFESSEUR" ||
+    raw === "PEDAGO" ||
     raw === "ELEVE"
   ) {
     return raw;

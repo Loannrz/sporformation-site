@@ -16,11 +16,13 @@ import {
   viewerHasEstablishmentCloudScope,
 } from "@/lib/cloud-teacher-scope";
 import { getSessionUser } from "@/lib/session-server";
+import { enforcePedagoNav } from "@/lib/pedago-access";
 import { redirect } from "@/i18n/navigation";
+import { fetchTeacherOnboardingFilesForCloud } from "@/lib/data/teacher-documents";
 
 export const dynamic = "force-dynamic";
 
-const EXPLORER_TABS = ["class", "teacher", "student", "all"] as const;
+const EXPLORER_TABS = ["class", "teacher", "student", "all", "myTeacherDocs"] as const;
 
 function readSearchParam(
   v: string | string[] | undefined,
@@ -44,6 +46,10 @@ export default async function CloudPage({
 
   if (!user) {
     return null;
+  }
+
+  if (user.role !== "ELEVE") {
+    enforcePedagoNav(user, params.locale, "cloud");
   }
 
   if (user.role === "ELEVE") {
@@ -91,6 +97,8 @@ export default async function CloudPage({
   });
   const allDocuments = await attachSignedUrlsToCloudFiles(allDocsRaw);
 
+  const myTeacherDocuments = await fetchTeacherOnboardingFilesForCloud(user);
+
   const classOptsRaw = await fetchAdminClassOptions();
   const classOptsFiltered =
     scopedClassIds != null
@@ -131,6 +139,7 @@ export default async function CloudPage({
       </div>
       <CloudExplorer
         locale={params.locale}
+        viewer={user}
         viewerId={user.id}
         viewerIsDirector={establishmentScope}
         hideExplorerSearch={!establishmentScope}
@@ -142,6 +151,7 @@ export default async function CloudPage({
         teacherFolders={folders.teachers}
         studentFolders={folders.students}
         allDocuments={allDocuments}
+        myTeacherDocuments={myTeacherDocuments}
       />
     </div>
   );

@@ -6,6 +6,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { formatDistanceToNow } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import { getSessionUser } from "@/lib/session-server";
+import { enforcePedagoNav } from "@/lib/pedago-access";
 import { redirect } from "@/i18n/navigation";
 import { hasPermission } from "@/lib/permissions";
 import {
@@ -25,6 +26,7 @@ export default async function MessagingIndexPage({
     redirect({ href: "/dashboard", locale: params.locale });
     throw new Error("Unreachable");
   }
+  enforcePedagoNav(sessionUser, params.locale, "messaging");
   if (!hasPermission(sessionUser, "SEND_MESSAGES")) {
     redirect({ href: "/dashboard", locale: params.locale });
     throw new Error("Unreachable");

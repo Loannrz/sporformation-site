@@ -36,6 +36,7 @@ type NavLinkShellProps = {
   disciplineOptions: DisciplineDialogOptions | null;
   notificationCount: number;
   sanctionsReminderCount: number;
+  leadFormsPendingCount: number;
   linkCls: (active: boolean, iconOnly: boolean) => string;
   onNavigate: () => void;
 };
@@ -49,6 +50,7 @@ function SidebarNavLinks({
   disciplineOptions,
   notificationCount,
   sanctionsReminderCount,
+  leadFormsPendingCount,
   linkCls,
   onNavigate,
 }: NavLinkShellProps) {
@@ -79,22 +81,30 @@ function SidebarNavLinks({
           item.labelKey === "messaging" && notificationCount > 0;
         const showSanctionsNavBadge =
           item.labelKey === "adminSanctions" && sanctionsReminderCount > 0;
-        const badgeValue = showMsgBadge
-          ? notificationCount
-          : showSanctionsNavBadge
-            ? sanctionsReminderCount
-            : 0;
-        const badge =
-          showMsgBadge || showSanctionsNavBadge ? (
-            <span
-              className={cn(
-                "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground",
-                !iconOnly && "ml-auto",
-              )}
-            >
-              {badgeValue > 9 ? "9+" : badgeValue}
-            </span>
-          ) : null;
+        const showLeadFormsNavBadge =
+          item.labelKey === "admin" && leadFormsPendingCount > 0;
+        let badgeValue = 0;
+        if (showMsgBadge) badgeValue = notificationCount;
+        else if (showSanctionsNavBadge) badgeValue = sanctionsReminderCount;
+        else if (showLeadFormsNavBadge) badgeValue = leadFormsPendingCount;
+
+        const showAnyBadge =
+          showMsgBadge || showSanctionsNavBadge || showLeadFormsNavBadge;
+        const badge = showAnyBadge ? (
+          <span
+            className={cn(
+              "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground",
+              !iconOnly && "ml-auto",
+            )}
+            aria-label={
+              showLeadFormsNavBadge
+                ? t("leadFormsPendingNavAria", { count: badgeValue })
+                : undefined
+            }
+          >
+            {badgeValue > 9 ? "9+" : badgeValue}
+          </span>
+        ) : null;
 
         const linkBody = (
           <Link
@@ -123,7 +133,16 @@ function SidebarNavLinks({
           return (
             <Tooltip key={linkKey} delayDuration={300}>
               <TooltipTrigger asChild>{linkBody}</TooltipTrigger>
-              <TooltipContent side="right">{label}</TooltipContent>
+              <TooltipContent side="right">
+                <div className="flex flex-col gap-1">
+                  <span>{label}</span>
+                  {showLeadFormsNavBadge ? (
+                    <span className="text-xs text-muted-foreground">
+                      {t("leadFormsPendingNavAria", { count: badgeValue })}
+                    </span>
+                  ) : null}
+                </div>
+              </TooltipContent>
             </Tooltip>
           );
         }
@@ -143,8 +162,10 @@ type Props = {
   user: SessionUser;
   /** Ex. messages non lus — brancher sur une source temps réel plus tard. */
   notificationCount?: number;
-  /** Sanctions actives encore non vues par l’admin (badge + pastille avertissement). */
+  /** Sanctions actives non consultées dans le hub (personnel habilité). */
   sanctionsReminderCount?: number;
+  /** Demandes formulaire vitrine encore « à traiter » (directeur). */
+  leadFormsPendingCount?: number;
   /** Données pour la modale « Avertissement » (null si non chargé). */
   disciplineOptions: DisciplineDialogOptions | null;
 };
@@ -153,6 +174,7 @@ export function AppSidebar({
   user,
   notificationCount = 0,
   sanctionsReminderCount = 0,
+  leadFormsPendingCount = 0,
   disciplineOptions,
 }: Props) {
   const pathname = usePathname();
@@ -224,6 +246,7 @@ export function AppSidebar({
       disciplineOptions,
       notificationCount,
       sanctionsReminderCount,
+      leadFormsPendingCount,
       linkCls,
       onNavigate: () => setDrawerOpen(false),
     }) satisfies Omit<NavLinkShellProps, "searchParams">;

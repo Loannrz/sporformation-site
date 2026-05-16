@@ -7,7 +7,8 @@ import {
   fetchSanctionsCreatedSinceForViewer,
 } from "@/lib/data/sanctions-admin";
 import { getSessionUser } from "@/lib/session-server";
-import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { isDirector } from "@/lib/roles";
+import { canManageSanctionsHubAsStaff } from "@/lib/pedago-access";
 import { redirectToAccessDenied } from "@/lib/guards";
 import { canAccessSanctionsHub } from "@/lib/permissions";
 import { getTranslations } from "next-intl/server";
@@ -25,31 +26,31 @@ export default async function SanctionsHubPage({
     redirectToAccessDenied(params.locale);
   }
 
-  const staffAdmin = isStaffAdmin(user);
+  const hubStaff = canManageSanctionsHubAsStaff(user);
 
   const [rows, lastSeen, ta, weekCount] = await Promise.all([
     fetchActiveSanctionsForViewer(user),
-    staffAdmin ? fetchAdminSanctionsLastSeenAt(user.id) : Promise.resolve(null),
+    hubStaff ? fetchAdminSanctionsLastSeenAt(user.id) : Promise.resolve(null),
     getTranslations({ locale: params.locale, namespace: "admin" }),
     (async () => {
       const since = new Date();
       since.setUTCDate(since.getUTCDate() - 7);
       const iso = since.toISOString();
-      return staffAdmin
+      return hubStaff
         ? fetchSanctionsCreatedSince(iso)
         : fetchSanctionsCreatedSinceForViewer(user, iso);
     })(),
   ]);
 
   const subtitle =
-    staffAdmin ? ta("sanctionsHub.pageSubtitle")
+    hubStaff ? ta("sanctionsHub.pageSubtitle")
     : user.role === "ELEVE" ? ta("sanctionsHub.pageSubtitleStudent")
     : user.role === "PROF_PRINCIPAL" ? ta("sanctionsHub.pageSubtitlePrincipal")
     : ta("sanctionsHub.pageSubtitleProfessor");
 
   return (
     <div className="space-y-8">
-      {staffAdmin ? (
+      {hubStaff ? (
         <AdminBackLink href="/admin" label={ta("backToAdmin")} />
       ) : null}
 
@@ -66,7 +67,7 @@ export default async function SanctionsHubPage({
         lastSeenIso={lastSeen}
         weekCreatedCount={weekCount}
         isDirector={isDirector(user)}
-        hubMode={staffAdmin ? "manage" : "readonly"}
+        hubMode={hubStaff ? "manage" : "readonly"}
         viewerRole={user.role}
         viewer={user}
       />

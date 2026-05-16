@@ -4,6 +4,7 @@ import { fetchAnnouncementsForUser } from "@/lib/data/school";
 import { orderAnnouncementsForBulletin } from "@/lib/announcements-order";
 import { hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
+import { enforcePedagoNav } from "@/lib/pedago-access";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -15,6 +16,9 @@ export default async function AnnouncementsPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
+  if (user) {
+    enforcePedagoNav(user, params.locale, "announcements");
+  }
   const t = await getTranslations({
     locale: params.locale,
     namespace: "announcements",

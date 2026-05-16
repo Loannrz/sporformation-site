@@ -15,8 +15,9 @@ import {
   formatAcademicYearRange,
 } from "@/lib/data/school";
 import { getSessionUser } from "@/lib/session-server";
-import { isDirector } from "@/lib/roles";
 import { redirectToAccessDenied } from "@/lib/guards";
+import { canAccessClassesManagementAdmin } from "@/lib/pedago-access";
+import { isDirector } from "@/lib/roles";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 import { notFound } from "next/navigation";
@@ -34,7 +35,7 @@ export default async function AdminClassDetailPage({
   params: { locale: AppLocale; id: string };
 }) {
   const user = await getSessionUser();
-  if (!user || !isDirector(user)) {
+  if (!user || !canAccessClassesManagementAdmin(user)) {
     redirectToAccessDenied(params.locale);
   }
 
@@ -119,7 +120,11 @@ export default async function AdminClassDetailPage({
           </div>
         </CardHeader>
         <CardContent className="p-6 sm:p-8">
-          <ClassAdminDetailForm locale={params.locale} initial={klass} />
+          <ClassAdminDetailForm
+            locale={params.locale}
+            initial={klass}
+            canDeleteClass={isDirector(user)}
+          />
         </CardContent>
       </Card>
 

@@ -53,6 +53,94 @@ export async function teacherSelfSignupAction(
     return { errorCode: "CONFIG", devDetail: null };
   }
 
+  const { data: pedagoProfile, error: pedagoQErr } = await admin
+    .from("profiles")
+    .select("id,base_role,must_set_password,first_name,last_name")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (pedagoQErr) {
+    return {
+      errorCode: "GENERIC",
+      devDetail:
+        process.env.NODE_ENV === "development" ? pedagoQErr.message : null,
+    };
+  }
+
+  if (
+    pedagoProfile &&
+    pedagoProfile.base_role === "PEDAGO" &&
+    pedagoProfile.must_set_password === true
+  ) {
+    const pid = pedagoProfile.id as string;
+    const { error: authUpdErr } = await admin.auth.admin.updateUserById(pid, {
+      password,
+      email_confirm: true,
+    });
+
+    if (authUpdErr) {
+      return {
+        errorCode: "PEDAGO_PASSWORD_SETUP_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development" ? authUpdErr.message : null,
+      };
+    }
+
+    const { error: profUpdErr } = await admin
+      .from("profiles")
+      .update({ must_set_password: false })
+      .eq("id", pid);
+
+    if (profUpdErr) {
+      return {
+        errorCode: "PROFILE_UPDATE_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development" ? profUpdErr.message : null,
+      };
+    }
+
+    const p = pedagoProfile as {
+      first_name?: string | null;
+      last_name?: string | null;
+    };
+    const label =
+      `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || email;
+
+    await logActivity({
+      actorId: pid,
+      actorLabel: label,
+      actorRole: "PEDAGO",
+      action: "AUTH_PASSWORD_FIRST_SET",
+      entityType: "profile",
+      entityId: pid,
+      meta: { email, flow: "pedago_first_signin_form" },
+    });
+
+    const serverSbPedago = await createServerSupabase();
+    if (!serverSbPedago) {
+      return { errorCode: "CONFIG", devDetail: null };
+    }
+
+    const { error: signErrPedago } =
+      await serverSbPedago.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+    if (signErrPedago) {
+      return {
+        errorCode: "SIGNIN_AFTER_SIGNUP_FAILED",
+        devDetail:
+          process.env.NODE_ENV === "development"
+            ? signErrPedago.message
+            : null,
+      };
+    }
+
+    redirect({ href: "/dashboard", locale });
+    return initialTeacherSignupState;
+  }
+
   const { data: existingProfile } = await admin
     .from("profiles")
     .select("id")

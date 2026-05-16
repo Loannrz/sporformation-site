@@ -4,6 +4,7 @@ import {
   PROFILE_SELECT_CORE,
   PROFILE_SELECT_ESTABLISHMENT,
   PROFILE_SELECT_ONBOARDING,
+  PROFILE_SELECT_TEACHER_DOCS,
   isMissingProfileColumnError,
 } from "@/lib/supabase/profile-columns";
 import { profileRoleToUserRole } from "@/lib/roles";
@@ -13,7 +14,7 @@ const PROFILE_SELECT_ADMIN_EXTENDED =
   "first_name,last_name,email,avatar_url,bio,joined_at,base_role,principal_class_ids,assigned_class_ids,subjects" as const;
 
 const ADMIN_LIST_WITH_ONBOARDING_EXT =
-  `id,email,${PROFILE_SELECT_ADMIN_EXTENDED},${PROFILE_SELECT_ESTABLISHMENT},${PROFILE_SELECT_ONBOARDING}` as const;
+  `id,email,${PROFILE_SELECT_ADMIN_EXTENDED},${PROFILE_SELECT_ESTABLISHMENT},${PROFILE_SELECT_ONBOARDING},${PROFILE_SELECT_TEACHER_DOCS}` as const;
 const ADMIN_LIST_MID_EXT =
   `id,email,${PROFILE_SELECT_ADMIN_EXTENDED},${PROFILE_SELECT_ESTABLISHMENT}` as const;
 const ADMIN_LIST_CORE_EXT = `id,email,${PROFILE_SELECT_ADMIN_EXTENDED}` as const;
@@ -41,6 +42,7 @@ export type StaffAdminRow = {
   leftEstablishmentOn: string | null;
   mustSetPassword: boolean;
   teacherEmploymentStatus: TeacherEmploymentStatus | null;
+  teacherDocumentsApprovedAt?: string | null;
 };
 
 function mapStaffRow(row: {
@@ -59,6 +61,7 @@ function mapStaffRow(row: {
   left_establishment_on?: string | null;
   must_set_password?: boolean | null;
   teacher_employment_status?: string | null;
+  teacher_documents_approved_at?: string | null;
 }): StaffAdminRow {
   return {
     id: row.id,
@@ -78,6 +81,11 @@ function mapStaffRow(row: {
     leftEstablishmentOn: row.left_establishment_on ?? null,
     mustSetPassword: row.must_set_password === true,
     teacherEmploymentStatus: (row.teacher_employment_status as TeacherEmploymentStatus) ?? null,
+    ...(row.teacher_documents_approved_at !== undefined
+      ? {
+          teacherDocumentsApprovedAt: row.teacher_documents_approved_at,
+        }
+      : {}),
   };
 }
 
@@ -85,6 +93,7 @@ async function selectAllStaff(supabase: NonNullable<Awaited<ReturnType<typeof cr
   const r0 = await supabase
     .from("profiles")
     .select(ADMIN_LIST_WITH_ONBOARDING_EXT)
+    .neq("base_role", "PEDAGO")
     .order("last_name", { ascending: true });
 
   if (!r0.error) return r0;
@@ -93,6 +102,7 @@ async function selectAllStaff(supabase: NonNullable<Awaited<ReturnType<typeof cr
   const r1 = await supabase
     .from("profiles")
     .select(ADMIN_LIST_WITH_ONBOARDING)
+    .neq("base_role", "PEDAGO")
     .order("last_name", { ascending: true });
 
   if (!r1.error) return r1;
@@ -101,6 +111,7 @@ async function selectAllStaff(supabase: NonNullable<Awaited<ReturnType<typeof cr
   const r2 = await supabase
     .from("profiles")
     .select(ADMIN_LIST_MID)
+    .neq("base_role", "PEDAGO")
     .order("last_name", { ascending: true });
 
   if (!r2.error) return r2;
@@ -109,6 +120,7 @@ async function selectAllStaff(supabase: NonNullable<Awaited<ReturnType<typeof cr
   return supabase
     .from("profiles")
     .select(ADMIN_LIST_CORE)
+    .neq("base_role", "PEDAGO")
     .order("last_name", { ascending: true });
 }
 
@@ -152,6 +164,7 @@ export async function fetchAllStaffForAdmin(): Promise<StaffAdminRow[]> {
     const r0 = await admin
       .from("profiles")
       .select(ADMIN_LIST_WITH_ONBOARDING_EXT)
+      .neq("base_role", "PEDAGO")
       .order("last_name", { ascending: true });
     if (!r0.error && r0.data) {
       return r0.data.map(mapStaffRow);
@@ -160,6 +173,7 @@ export async function fetchAllStaffForAdmin(): Promise<StaffAdminRow[]> {
       const r1 = await admin
         .from("profiles")
         .select(ADMIN_LIST_WITH_ONBOARDING)
+        .neq("base_role", "PEDAGO")
         .order("last_name", { ascending: true });
       if (!r1.error && r1.data) {
         return r1.data.map(mapStaffRow);
@@ -168,6 +182,7 @@ export async function fetchAllStaffForAdmin(): Promise<StaffAdminRow[]> {
         const r2 = await admin
           .from("profiles")
           .select(ADMIN_LIST_MID)
+          .neq("base_role", "PEDAGO")
           .order("last_name", { ascending: true });
         if (!r2.error && r2.data) {
           return r2.data.map(mapStaffRow);
@@ -176,6 +191,7 @@ export async function fetchAllStaffForAdmin(): Promise<StaffAdminRow[]> {
           const r3 = await admin
             .from("profiles")
             .select(ADMIN_LIST_CORE)
+            .neq("base_role", "PEDAGO")
             .order("last_name", { ascending: true });
           if (!r3.error && r3.data) return r3.data.map(mapStaffRow);
         }

@@ -6,7 +6,12 @@ import {
   PROFILE_SELECT_SESSION_FULL,
   isMissingProfileColumnError,
 } from "@/lib/supabase/profile-columns";
+import {
+  mergePedagoAdminFromDb,
+  mergePedagoNavFromDb,
+} from "@/lib/pedago-access";
 import { profileRoleToUserRole } from "@/lib/roles";
+import { sessionWithTeacherDocumentsGate } from "@/lib/teacher-documents-gate";
 import type { SessionUser, TeacherEmploymentStatus } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -116,6 +121,11 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const extended = profile as typeof profile & {
       must_set_password?: boolean | null;
       teacher_employment_status?: string | null;
+      pedago_nav_flags?: unknown;
+      pedago_admin_flags?: unknown;
+      teacher_documents_bundle_submitted_at?: string | null;
+      teacher_documents_approved_at?: string | null;
+      teacher_documents_approved_by?: string | null;
     };
 
     const role = profileRoleToUserRole(String(profile.base_role));
@@ -137,7 +147,29 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       teacherEmploymentStatus: extended.teacher_employment_status as
         | TeacherEmploymentStatus
         | undefined,
+      ...(extended.teacher_documents_approved_at !== undefined ||
+      extended.teacher_documents_bundle_submitted_at !== undefined
+        ? {
+            teacherDocumentsApprovedAt: extended.teacher_documents_approved_at
+              ? new Date(extended.teacher_documents_approved_at).toISOString()
+              : null,
+            teacherDocumentsBundleSubmittedAt:
+              extended.teacher_documents_bundle_submitted_at
+                ? new Date(
+                    extended.teacher_documents_bundle_submitted_at,
+                  ).toISOString()
+                : null,
+          }
+        : {}),
     };
+
+    if (role === "PEDAGO") {
+      session = {
+        ...session,
+        pedagoNav: mergePedagoNavFromDb(extended.pedago_nav_flags),
+        pedagoAdmin: mergePedagoAdminFromDb(extended.pedago_admin_flags),
+      };
+    }
 
     if (role === "PROFESSEUR" || role === "PROF_PRINCIPAL") {
       let assignedClassIds: string[] = [];
@@ -170,6 +202,29 @@ export async function getSessionUser(): Promise<SessionUser | null> {
           null,
       };
     }
+
+    let teacherDocRequestCount = 0;
+    const teacherDocsColumnsPresent =
+      extended.teacher_documents_approved_at !== undefined;
+    if (
+      teacherDocsColumnsPresent &&
+      (role === "PROFESSEUR" || role === "PROF_PRINCIPAL") &&
+      extended.teacher_employment_status === "NEW_TO_SCHOOL" &&
+      !extended.teacher_documents_approved_at
+    ) {
+      const { count, error: reqCountErr } = await supabase
+        .from("teacher_document_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("teacher_profile_id", user.id);
+      if (!reqCountErr) {
+        teacherDocRequestCount = count ?? 0;
+      }
+    }
+
+    session = sessionWithTeacherDocumentsGate(
+      session,
+      teacherDocsColumnsPresent ? teacherDocRequestCount : 0,
+    );
 
     return session;
   }

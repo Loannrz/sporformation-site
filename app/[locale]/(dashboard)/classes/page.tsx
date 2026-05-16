@@ -14,6 +14,7 @@ import {
   isViewerPrincipalClassCard,
 } from "@/lib/staff-classes-view";
 import { getSessionUser } from "@/lib/session-server";
+import { enforcePedagoNav } from "@/lib/pedago-access";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,8 @@ export default async function ClassesPage({
   if (user.role === "ELEVE") {
     redirect({ href: "/dashboard", locale: params.locale });
   }
+
+  enforcePedagoNav(user, params.locale, "classes");
 
   const rawCards = await fetchStaffClassesOverview();
   const classes = filterAndOrderStaffClassCards(rawCards, user);

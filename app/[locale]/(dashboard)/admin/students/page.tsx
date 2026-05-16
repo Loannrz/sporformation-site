@@ -5,7 +5,8 @@ import { ImportStudentsModal } from "@/components/admin/import-students-modal";
 import { fetchAdminClassOptions } from "@/lib/data/school";
 import { fetchAllStudentsForAdmin } from "@/lib/data/students-admin";
 import { getSessionUser } from "@/lib/session-server";
-import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { isDirector } from "@/lib/roles";
+import { canAccessStudentAdministration } from "@/lib/pedago-access";
 import { redirectToAccessDenied } from "@/lib/guards";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
@@ -16,7 +17,7 @@ export default async function AdminStudentsPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canAccessStudentAdministration(user)) {
     redirectToAccessDenied(params.locale);
   }
 

@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getSessionUser } from "@/lib/session-server";
-import { isDirector, isStaffAdmin } from "@/lib/roles";
+import { isDirector } from "@/lib/roles";
+import { canManageSanctionsHubAsStaff } from "@/lib/pedago-access";
 import type { AppLocale } from "@/i18n/routing";
 import type { SanctionType } from "@/types";
 import { SANCTION_FORM_TYPES_ORDER } from "@/lib/discipline-types";
@@ -27,7 +28,7 @@ export async function markAdminSanctionsSeenAction(
   locale: AppLocale,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canManageSanctionsHubAsStaff(user)) {
     return { ok: false, error: "FORBIDDEN" };
   }
 
@@ -52,7 +53,7 @@ export async function updateSanctionStaffAdminAction(
   formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canManageSanctionsHubAsStaff(user)) {
     return { ok: false, error: "FORBIDDEN" };
   }
 
@@ -121,7 +122,7 @@ export async function retireSanctionStaffAdminAction(
   formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canManageSanctionsHubAsStaff(user)) {
     return { ok: false, error: "FORBIDDEN" };
   }
 

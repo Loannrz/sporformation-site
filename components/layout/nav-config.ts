@@ -1,6 +1,7 @@
 import type { SessionUser } from "@/types";
 import { canAccessSanctionsHub, hasPermission } from "@/lib/permissions";
 import { isStaffAdmin } from "@/lib/roles";
+import { canOpenAdministrationHub } from "@/lib/pedago-access";
 import {
   LayoutDashboard,
   Megaphone,
@@ -11,6 +12,7 @@ import {
   Shield,
   AlertTriangle,
   ClipboardList,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -23,7 +25,8 @@ export type NavLabelKey =
   | "calendar"
   | "warnings"
   | "admin"
-  | "adminSanctions";
+  | "adminSanctions"
+  | "requiredDocuments";
 
 export type NavItem =
   | {
@@ -73,6 +76,12 @@ export function isNavLinkActive(
     if (pathname.startsWith("/cloud/")) {
       return true;
     }
+    return false;
+  }
+
+  if (item.labelKey === "requiredDocuments") {
+    if (pathname === "/documents-a-fournir") return true;
+    if (pathname.startsWith("/documents-a-fournir/")) return true;
     return false;
   }
 
@@ -128,6 +137,17 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
     }
 
     return items;
+  }
+
+  if (user.teacherDocumentsGateActive === true) {
+    return [
+      {
+        kind: "link",
+        href: "/documents-a-fournir",
+        labelKey: "requiredDocuments",
+        icon: FileText,
+      },
+    ];
   }
 
   const core: NavItem[] = [
@@ -189,7 +209,7 @@ export function buildNavItems(user: SessionUser | null): NavItem[] {
     });
   }
 
-  if (isStaffAdmin(user)) {
+  if (canOpenAdministrationHub(user)) {
     filtered.push({
       kind: "link",
       href: "/admin",

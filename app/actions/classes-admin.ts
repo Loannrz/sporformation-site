@@ -11,6 +11,7 @@ import { ensureClassStudentInboxFolder } from "@/lib/data/school";
 import { getSessionUser } from "@/lib/session-server";
 import { stripClassFromOtherProfiles } from "@/app/actions/staff-admin";
 import { isDirector } from "@/lib/roles";
+import { canAccessClassesManagementAdmin } from "@/lib/pedago-access";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 
@@ -80,7 +81,15 @@ async function deleteClassCloudFilesAndStorage(
   return { ok: true };
 }
 
-async function requireDirector() {
+async function requireClassesManagement() {
+  const user = await getSessionUser();
+  if (!user || !canAccessClassesManagementAdmin(user)) {
+    return { ok: false as const, error: "FORBIDDEN" as const };
+  }
+  return { ok: true as const, user };
+}
+
+async function requireDirectorForClassDeletion() {
   const user = await getSessionUser();
   if (!user || !isDirector(user)) {
     return { ok: false as const, error: "FORBIDDEN" as const };
@@ -199,7 +208,7 @@ export async function createClassAction(
     academicYearEnd: number;
   },
 ) {
-  const gate = await requireDirector();
+  const gate = await requireClassesManagement();
   if (!gate.ok) return { ok: false as const, error: gate.error };
 
   const admin = createAdminSupabase();
@@ -284,7 +293,7 @@ export async function updateClassAction(
     academicYearEnd: number;
   },
 ) {
-  const gate = await requireDirector();
+  const gate = await requireClassesManagement();
   if (!gate.ok) return { ok: false as const, error: gate.error };
 
   const admin = createAdminSupabase();
@@ -356,7 +365,7 @@ export async function updateClassAction(
 }
 
 export async function deleteClassAction(locale: AppLocale, classId: string) {
-  const gate = await requireDirector();
+  const gate = await requireDirectorForClassDeletion();
   if (!gate.ok) return { ok: false as const, error: gate.error };
 
   const admin = createAdminSupabase();

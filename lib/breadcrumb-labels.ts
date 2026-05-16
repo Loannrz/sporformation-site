@@ -15,6 +15,8 @@ export type BreadcrumbLabelKey =
   | "adminAccounts"
   | "adminClasses"
   | "adminStudents"
+  | "adminLeadForms"
+  | "adminPedagoUsers"
   | "students"
   | "detail"
   | "folder"
@@ -65,6 +67,14 @@ export function breadcrumbLabelKeyForSegment(
 
   if (lower === "calendar" && parent === "admin") {
     return "adminCalendar";
+  }
+
+  if (lower === "lead-forms" && parent === "admin") {
+    return "adminLeadForms";
+  }
+
+  if (lower === "pedago-users" && parent === "admin") {
+    return "adminPedagoUsers";
   }
 
   if (lower === "roles" && parent === "administration") {

@@ -12,9 +12,17 @@ export const PROFILE_SELECT_ESTABLISHMENT =
 export const PROFILE_SELECT_ONBOARDING =
   "must_set_password,teacher_employment_status" as const;
 
+/** Drapeaux accès comptes pédago (migration 20260624). */
+export const PROFILE_SELECT_PEDAGO_FLAGS =
+  "pedago_nav_flags,pedago_admin_flags" as const;
+
+/** Validation dossier enseignant nouvelle recrue (migration 20260625). */
+export const PROFILE_SELECT_TEACHER_DOCS =
+  "teacher_documents_bundle_submitted_at,teacher_documents_approved_at,teacher_documents_approved_by" as const;
+
 export const PROFILE_SELECT_SESSION = `${PROFILE_SELECT_CORE},${PROFILE_SELECT_ESTABLISHMENT}` as const;
 
-export const PROFILE_SELECT_SESSION_FULL = `${PROFILE_SELECT_CORE},${PROFILE_SELECT_ESTABLISHMENT},${PROFILE_SELECT_ONBOARDING}` as const;
+export const PROFILE_SELECT_SESSION_FULL = `${PROFILE_SELECT_CORE},${PROFILE_SELECT_ESTABLISHMENT},${PROFILE_SELECT_ONBOARDING},${PROFILE_SELECT_PEDAGO_FLAGS},${PROFILE_SELECT_TEACHER_DOCS}` as const;
 
 export function isMissingProfileColumnError(err: PostgrestError | null): boolean {
   if (!err) return false;
@@ -26,6 +34,11 @@ export function isMissingProfileColumnError(err: PostgrestError | null): boolean
     m.includes("left_establishment_on") ||
     m.includes("must_set_password") ||
     m.includes("teacher_employment_status") ||
+    m.includes("pedago_nav_flags") ||
+    m.includes("pedago_admin_flags") ||
+    m.includes("teacher_documents_bundle_submitted_at") ||
+    m.includes("teacher_documents_approved_at") ||
+    m.includes("teacher_documents_approved_by") ||
     m.includes("schema cache")
   );
 }

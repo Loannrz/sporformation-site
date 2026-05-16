@@ -10,7 +10,7 @@ import {
 } from "@/lib/data/school";
 import { fetchAllStaffForAdmin } from "@/lib/data/staff-admin";
 import { redirectToAccessDenied } from "@/lib/guards";
-import { isStaffAdmin } from "@/lib/roles";
+import { canManageSchoolCalendarAsStaff } from "@/lib/pedago-access";
 import { getSessionUser } from "@/lib/session-server";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
@@ -23,7 +23,7 @@ export default async function AdminCalendarPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canManageSchoolCalendarAsStaff(user)) {
     redirectToAccessDenied(params.locale);
   }
 

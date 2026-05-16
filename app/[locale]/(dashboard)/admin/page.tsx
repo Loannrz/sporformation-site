@@ -18,12 +18,30 @@ import {
   Megaphone,
   CalendarDays,
   ClipboardList,
+  Inbox,
   History,
+  UserRound,
+  FileText,
 } from "lucide-react";
 import {
   fetchActiveSanctionsCount,
   fetchAdminSanctionsNewCount,
 } from "@/lib/data/sanctions-admin";
+import { fetchSiteLeadPendingTotal } from "@/lib/data/site-lead-forms";
+import {
+  canOpenAdministrationHub,
+  isPedago,
+  pedagoCanAccessHubHref,
+} from "@/lib/pedago-access";
+import type { SessionUser } from "@/types";
+
+type HubCard = {
+  href: string;
+  title: string;
+  desc: string;
+  Icon: typeof School;
+  badgeCount: number;
+};
 
 export default async function AdminHubPage({
   params,
@@ -31,7 +49,7 @@ export default async function AdminHubPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canOpenAdministrationHub(user)) {
     redirectToAccessDenied(params.locale);
   }
 
@@ -40,18 +58,29 @@ export default async function AdminHubPage({
     namespace: "admin.hub",
   });
 
-  const director = isDirector(user);
-
-  if (!director) {
+  if (isStaffAdmin(user) && user.role === "ADMINISTRATEUR") {
     redirect({ href: "/admin/users", locale: params.locale });
   }
 
-  const [sanctionsActiveCount, sanctionsNewCount] = await Promise.all([
-    fetchActiveSanctionsCount(),
-    fetchAdminSanctionsNewCount(user.id),
-  ]);
+  const director = isDirector(user);
 
-  const cards = [
+  const [sanctionsActiveCount, sanctionsNewCount, leadPending] =
+    await Promise.all([
+      fetchActiveSanctionsCount(),
+      fetchAdminSanctionsNewCount(user.id),
+      fetchSiteLeadPendingTotal(),
+    ]);
+
+  const teacherDocsCard: HubCard = {
+    href: "/admin/teacher-documents",
+    title: t("teacherDocsTitle"),
+    desc: t("teacherDocsDesc"),
+    Icon: FileText,
+    badgeCount: 0,
+  };
+
+  /** Cartes sans « Documents enseignants » (réordonnancement directeur : pédago → documents → historique). */
+  const hubCardsBase: HubCard[] = [
     {
       href: "/administration/classes",
       title: t("classesTitle"),
@@ -95,6 +124,13 @@ export default async function AdminHubPage({
       badgeCount: 0,
     },
     {
+      href: "/admin/lead-forms",
+      title: t("leadFormsTitle"),
+      desc: t("leadFormsDesc"),
+      Icon: Inbox,
+      badgeCount: leadPending,
+    },
+    {
       href: "/admin/history",
       title: t("historyTitle"),
       desc: t("historyDesc"),
@@ -102,6 +138,39 @@ export default async function AdminHubPage({
       badgeCount: 0,
     },
   ];
+
+  /** Hub non-directeur : documents enseignants après « Comptes enseignants ». */
+  const coreCards: HubCard[] = [
+    ...hubCardsBase.slice(0, 2),
+    teacherDocsCard,
+    ...hubCardsBase.slice(2),
+  ];
+
+  const pedagoManageCard: HubCard = {
+    href: "/admin/pedago-users",
+    title: t("pedagoTitle"),
+    desc: t("pedagoDesc"),
+    Icon: UserRound,
+    badgeCount: 0,
+  };
+
+  let cards: HubCard[];
+  if (isPedago(user)) {
+    cards = coreCards.filter((c) =>
+      pedagoCanAccessHubHref(user as SessionUser, c.href),
+    );
+  } else if (director) {
+    const beforeHistory = hubCardsBase.slice(0, 7);
+    const historyCard = hubCardsBase[7]!;
+    cards = [
+      ...beforeHistory,
+      pedagoManageCard,
+      teacherDocsCard,
+      historyCard,
+    ];
+  } else {
+    cards = coreCards;
+  }
 
   return (
     <div className="space-y-8">
@@ -123,9 +192,7 @@ export default async function AdminHubPage({
                 <CardTitle className="text-lg">{title}</CardTitle>
                 <CardDescription>{desc}</CardDescription>
               </CardHeader>
-              <CardContent className="text-sm text-primary">
-                {t("open")}
-              </CardContent>
+              <CardContent className="text-sm text-primary">{t("open")}</CardContent>
             </Card>
           </Link>
         ))}

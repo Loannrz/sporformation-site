@@ -3,8 +3,8 @@ import { AdminClassesSearchableList } from "@/components/admin/admin-classes-sea
 import { CreateClassModal } from "@/components/admin/create-class-modal";
 import { fetchClassesWithStudentsForAdmin } from "@/lib/data/school";
 import { getSessionUser } from "@/lib/session-server";
-import { isDirector } from "@/lib/roles";
 import { redirectToAccessDenied } from "@/lib/guards";
+import { canAccessClassesManagementAdmin } from "@/lib/pedago-access";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
 import { GraduationCap } from "lucide-react";
@@ -15,7 +15,7 @@ export default async function AdminClassesPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || !isDirector(user)) {
+  if (!user || !canAccessClassesManagementAdmin(user)) {
     redirectToAccessDenied(params.locale);
   }
 

@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import type { AppLocale } from "@/i18n/routing";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { getSessionUser } from "@/lib/session-server";
-import { isStaffAdmin } from "@/lib/roles";
+import { canAccessStudentAdministration } from "@/lib/pedago-access";
 import { actorFromSession, logActivity } from "@/lib/data/activity-logs";
 import {
   STUDENT_EXTENDED_COLUMNS,
@@ -225,7 +225,7 @@ function nameKey(first: string, last: string): string {
 
 async function requireStaffAdmin() {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canAccessStudentAdministration(user)) {
     return { ok: false as const, error: "FORBIDDEN" as const };
   }
   return { ok: true as const, user };
