@@ -14,6 +14,7 @@ export function DashboardShell({
   notificationCount = 0,
   sanctionsReminderCount = 0,
   leadFormsPendingCount = 0,
+  teacherDocumentsPendingCount = 0,
   disciplineOptions = null,
   locale,
 }: {
@@ -25,6 +26,8 @@ export function DashboardShell({
   sanctionsReminderCount?: number;
   /** Demandes formulaire vitrine non traitées (directeur uniquement). */
   leadFormsPendingCount?: number;
+  /** Dossiers enseignants envoyés en attente de validation (direction / admin). */
+  teacherDocumentsPendingCount?: number;
   disciplineOptions?: DisciplineDialogOptions | null;
   locale: AppLocale;
 }) {
@@ -37,6 +40,7 @@ export function DashboardShell({
         notificationCount={notificationCount}
         sanctionsReminderCount={sanctionsReminderCount}
         leadFormsPendingCount={leadFormsPendingCount}
+        teacherDocumentsPendingCount={teacherDocumentsPendingCount}
         disciplineOptions={disciplineOptions}
       />
       <div className="flex min-h-screen flex-1 flex-col lg:overflow-x-hidden">

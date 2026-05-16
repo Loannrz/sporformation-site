@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CloudClassFolderPageBody } from "@/components/cloud/cloud-class-folder-page-body";
+import { CloudDeleteTeacherFolderButton } from "@/components/cloud/cloud-delete-teacher-folder-button";
 import { CloudFolderFileBrowser } from "@/components/cloud/cloud-folder-file-browser";
 import { CloudUploadDocumentButton } from "@/components/cloud/cloud-upload-document-button";
 import { getTranslations } from "next-intl/server";
@@ -331,14 +332,28 @@ export default async function CloudFolderPage({
       ) : (
         <Card className="overflow-hidden rounded-2xl border-border/65 shadow-lg shadow-black/[0.03] ring-1 ring-black/[0.03] dark:shadow-black/25 dark:ring-white/[0.06]">
           <CardHeader className="border-b border-border/50 bg-gradient-to-br from-muted/35 via-muted/15 to-transparent pb-6 dark:from-muted/25">
-            <CardTitle className="text-2xl font-semibold tracking-tight">
-              {displayTitle}
-            </CardTitle>
-            <CardDescription className="text-base text-muted-foreground">
-              {parsed?.kind === "student"
-                ? t("folderStudentDepositSubtitle")
-                : t("folderDetailSubtitle")}
-            </CardDescription>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-2xl font-semibold tracking-tight">
+                  {displayTitle}
+                </CardTitle>
+                <CardDescription className="text-base text-muted-foreground">
+                  {parsed?.kind === "student"
+                    ? t("folderStudentDepositSubtitle")
+                    : t("folderDetailSubtitle")}
+                </CardDescription>
+              </div>
+              {parsed?.kind === "teacher" &&
+              viewerIsDirector &&
+              files.length > 0 ? (
+                <CloudDeleteTeacherFolderButton
+                  locale={params.locale}
+                  ownerId={parsed.id}
+                  teacherFolderLabel={displayTitle}
+                  fileCount={files.length}
+                />
+              ) : null}
+            </div>
           </CardHeader>
           <CardContent className="space-y-8 p-6 sm:p-8">
             {files.length === 0 ? (

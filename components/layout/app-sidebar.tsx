@@ -37,6 +37,7 @@ type NavLinkShellProps = {
   notificationCount: number;
   sanctionsReminderCount: number;
   leadFormsPendingCount: number;
+  teacherDocumentsPendingCount: number;
   linkCls: (active: boolean, iconOnly: boolean) => string;
   onNavigate: () => void;
 };
@@ -51,6 +52,7 @@ function SidebarNavLinks({
   notificationCount,
   sanctionsReminderCount,
   leadFormsPendingCount,
+  teacherDocumentsPendingCount,
   linkCls,
   onNavigate,
 }: NavLinkShellProps) {
@@ -81,28 +83,37 @@ function SidebarNavLinks({
           item.labelKey === "messaging" && notificationCount > 0;
         const showSanctionsNavBadge =
           item.labelKey === "adminSanctions" && sanctionsReminderCount > 0;
-        const showLeadFormsNavBadge =
-          item.labelKey === "admin" && leadFormsPendingCount > 0;
+        const adminPendingTotal =
+          item.labelKey === "admin"
+            ? leadFormsPendingCount + teacherDocumentsPendingCount
+            : 0;
+        const showAdminNavBadge = item.labelKey === "admin" && adminPendingTotal > 0;
+
         let badgeValue = 0;
         if (showMsgBadge) badgeValue = notificationCount;
         else if (showSanctionsNavBadge) badgeValue = sanctionsReminderCount;
-        else if (showLeadFormsNavBadge) badgeValue = leadFormsPendingCount;
+        else if (showAdminNavBadge) badgeValue = adminPendingTotal;
+
+        const adminNavAriaLabel = (() => {
+          if (item.labelKey !== "admin" || !showAdminNavBadge) return undefined;
+          const l = leadFormsPendingCount;
+          const d = teacherDocumentsPendingCount;
+          if (l > 0 && d > 0) return t("adminNavPendingBoth", { lead: l, teacher: d });
+          if (l > 0) return t("leadFormsPendingNavAria", { count: l });
+          return t("teacherDocsPendingNavAria", { count: d });
+        })();
 
         const showAnyBadge =
-          showMsgBadge || showSanctionsNavBadge || showLeadFormsNavBadge;
+          showMsgBadge || showSanctionsNavBadge || showAdminNavBadge;
         const badge = showAnyBadge ? (
           <span
             className={cn(
               "flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground",
               !iconOnly && "ml-auto",
             )}
-            aria-label={
-              showLeadFormsNavBadge
-                ? t("leadFormsPendingNavAria", { count: badgeValue })
-                : undefined
-            }
+            aria-label={adminNavAriaLabel}
           >
-            {badgeValue > 9 ? "9+" : badgeValue}
+            {badgeValue > 99 ? "99+" : badgeValue}
           </span>
         ) : null;
 
@@ -116,7 +127,7 @@ function SidebarNavLinks({
               <Icon className="h-4 w-4 opacity-80" />
               {iconOnly && badge ? (
                 <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold leading-none text-primary-foreground">
-                  {badgeValue > 9 ? "+" : badgeValue}
+                  {badgeValue > 99 ? "99" : badgeValue}
                 </span>
               ) : null}
             </span>
@@ -136,9 +147,9 @@ function SidebarNavLinks({
               <TooltipContent side="right">
                 <div className="flex flex-col gap-1">
                   <span>{label}</span>
-                  {showLeadFormsNavBadge ? (
+                  {showAdminNavBadge && adminNavAriaLabel ? (
                     <span className="text-xs text-muted-foreground">
-                      {t("leadFormsPendingNavAria", { count: badgeValue })}
+                      {adminNavAriaLabel}
                     </span>
                   ) : null}
                 </div>
@@ -166,6 +177,8 @@ type Props = {
   sanctionsReminderCount?: number;
   /** Demandes formulaire vitrine encore « à traiter » (directeur). */
   leadFormsPendingCount?: number;
+  /** Dossiers enseignants en attente de validation (direction / admin). */
+  teacherDocumentsPendingCount?: number;
   /** Données pour la modale « Avertissement » (null si non chargé). */
   disciplineOptions: DisciplineDialogOptions | null;
 };
@@ -175,6 +188,7 @@ export function AppSidebar({
   notificationCount = 0,
   sanctionsReminderCount = 0,
   leadFormsPendingCount = 0,
+  teacherDocumentsPendingCount = 0,
   disciplineOptions,
 }: Props) {
   const pathname = usePathname();
@@ -247,6 +261,7 @@ export function AppSidebar({
       notificationCount,
       sanctionsReminderCount,
       leadFormsPendingCount,
+      teacherDocumentsPendingCount,
       linkCls,
       onNavigate: () => setDrawerOpen(false),
     }) satisfies Omit<NavLinkShellProps, "searchParams">;

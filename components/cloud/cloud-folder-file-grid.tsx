@@ -7,6 +7,7 @@ import type { CloudFolderFileWithUrl, CloudStudentUploadOption } from "@/lib/dat
 import type { AppLocale } from "@/i18n/routing";
 import type { CloudClassSelectOption } from "./cloud-upload-document-button";
 import { CloudDocumentAudienceBadge } from "@/components/cloud/cloud-audience-ui";
+import { CloudDeleteCloudDocumentButton } from "./cloud-delete-cloud-document-button";
 import { CloudEditDocumentButton } from "./cloud-edit-document-button";
 
 function isImageMime(mime: string | null): boolean {
@@ -91,8 +92,8 @@ export function CloudFolderFileGrid({
                 <div className="mt-auto flex flex-col gap-2">
                   <div
                     className={
-                      showEdit
-                        ? "flex w-full gap-2"
+                      showEdit || viewerIsDirector
+                        ? "flex w-full flex-wrap gap-2"
                         : "flex w-full flex-col gap-2"
                     }
                   >
@@ -101,7 +102,7 @@ export function CloudFolderFileGrid({
                       size="sm"
                       variant="secondary"
                       className={
-                        showEdit ? "min-w-0 flex-1" : "w-full"
+                        showEdit || viewerIsDirector ? "min-w-0 flex-1" : "w-full"
                       }
                     >
                       <a
@@ -132,14 +133,23 @@ export function CloudFolderFileGrid({
                         compact
                       />
                     ) : null}
+                    {viewerIsDirector ? (
+                      <CloudDeleteCloudDocumentButton
+                        locale={locale}
+                        fileId={f.id}
+                        fileTitle={f.title}
+                        folderSlug={folderSlug}
+                        compact
+                      />
+                    ) : null}
                   </div>
                 </div>
               ) : (
                 <div className="mt-auto flex flex-col gap-2">
                   <div
                     className={
-                      showEdit
-                        ? "flex w-full gap-2"
+                      showEdit || viewerIsDirector
+                        ? "flex w-full flex-wrap gap-2"
                         : "flex w-full flex-col gap-2"
                     }
                   >
@@ -147,7 +157,7 @@ export function CloudFolderFileGrid({
                       size="sm"
                       variant="secondary"
                       className={
-                        showEdit ? "min-w-0 flex-1" : "w-full"
+                        showEdit || viewerIsDirector ? "min-w-0 flex-1" : "w-full"
                       }
                       disabled
                     >
@@ -169,6 +179,15 @@ export function CloudFolderFileGrid({
                         studentOptions={studentOptions}
                         folderSlug={folderSlug}
                         folderOptionsForClass={folderOptionsForClass}
+                        compact
+                      />
+                    ) : null}
+                    {viewerIsDirector ? (
+                      <CloudDeleteCloudDocumentButton
+                        locale={locale}
+                        fileId={f.id}
+                        fileTitle={f.title}
+                        folderSlug={folderSlug}
                         compact
                       />
                     ) : null}

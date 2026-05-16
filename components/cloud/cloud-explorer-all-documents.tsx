@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { CloudDocumentAudienceBadge } from "@/components/cloud/cloud-audience-ui";
 import type { CloudExplorerFileWithUrl, CloudStudentUploadOption } from "@/lib/data/school";
 import type { AppLocale } from "@/i18n/routing";
+import { CloudDeleteCloudDocumentButton } from "./cloud-delete-cloud-document-button";
+import { CloudDeleteTeacherFolderButton } from "./cloud-delete-teacher-folder-button";
 import { CloudEditDocumentButton } from "./cloud-edit-document-button";
 import type { CloudClassSelectOption } from "./cloud-upload-document-button";
 
@@ -29,9 +31,18 @@ export type CloudAllDocumentsSort =
 
 type ViewMode = "grid" | "list";
 
+type TeacherDocGroup = {
+  key: string;
+  ownerId: string | null;
+  label: string;
+  files: CloudExplorerFileWithUrl[];
+};
+
 type Props = {
   files: CloudExplorerFileWithUrl[];
   searchQuery: string;
+  /** Restreint aux fichiers dont `owner_id` correspond (direction / fichier admin). */
+  teacherFolderFilterOwnerId?: string | null;
   locale: AppLocale;
   viewerId: string;
   viewerIsDirector: boolean;
@@ -55,10 +66,11 @@ function matchesDocSearch(f: CloudExplorerFileWithUrl, needle: string): boolean 
   return blob.includes(q);
 }
 
-/** Liste / grille carrée de tous les documents Cloud avec tri et recherche. */
+/** Liste / grille de tous les documents Cloud : tri, recherche, dossiers par professeur. */
 export function CloudExplorerAllDocuments({
   files,
   searchQuery,
+  teacherFolderFilterOwnerId = null,
   locale,
   viewerId,
   viewerIsDirector,
@@ -72,7 +84,10 @@ export function CloudExplorerAllDocuments({
   const [view, setView] = useState<ViewMode>("grid");
 
   const processed = useMemo(() => {
-    const list = files.filter((f) => matchesDocSearch(f, searchQuery));
+    let list = files.filter((f) => matchesDocSearch(f, searchQuery));
+    if (teacherFolderFilterOwnerId) {
+      list = list.filter((f) => f.ownerId === teacherFolderFilterOwnerId);
+    }
     const time = (s: string) => {
       const n = new Date(s).getTime();
       return Number.isFinite(n) ? n : 0;
@@ -84,7 +99,10 @@ export function CloudExplorerAllDocuments({
     const studentKey = (f: CloudExplorerFileWithUrl) =>
       (f.studentName ?? "\uffff").toLowerCase();
 
-    const cmp: Record<CloudAllDocumentsSort, (a: CloudExplorerFileWithUrl, b: CloudExplorerFileWithUrl) => number> = {
+    const cmp: Record<
+      CloudAllDocumentsSort,
+      (a: CloudExplorerFileWithUrl, b: CloudExplorerFileWithUrl) => number
+    > = {
       "date-desc": (a, b) => time(b.createdAt) - time(a.createdAt),
       "date-asc": (a, b) => time(a.createdAt) - time(b.createdAt),
       "name-asc": (a, b) =>
@@ -104,7 +122,36 @@ export function CloudExplorerAllDocuments({
     };
     list.sort(cmp[sort]);
     return list;
-  }, [files, searchQuery, sort, locale]);
+  }, [files, searchQuery, teacherFolderFilterOwnerId, sort, locale]);
+
+  const grouped: TeacherDocGroup[] = useMemo(() => {
+    const unassignedLabel = t("explorerNoTeacher");
+    const byKey = new Map<string, CloudExplorerFileWithUrl[]>();
+    for (const f of processed) {
+      const key = f.ownerId ?? "__unassigned__";
+      const arr = byKey.get(key);
+      if (arr) arr.push(f);
+      else byKey.set(key, [f]);
+    }
+    const sections: TeacherDocGroup[] = [...byKey.entries()].map(
+      ([key, sectionFiles]) => {
+        const ownerId = key === "__unassigned__" ? null : key;
+        const label =
+          ownerId != null
+            ? sectionFiles.find((x) => x.teacherName)?.teacherName ??
+              sectionFiles[0]?.teacherName ??
+              unassignedLabel
+            : unassignedLabel;
+        return { key, ownerId, label, files: sectionFiles };
+      },
+    );
+    sections.sort((a, b) => {
+      if (a.ownerId === null && b.ownerId !== null) return 1;
+      if (a.ownerId !== null && b.ownerId === null) return -1;
+      return a.label.localeCompare(b.label, locale, { sensitivity: "base" });
+    });
+    return sections;
+  }, [processed, locale, t]);
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -211,194 +258,262 @@ export function CloudExplorerAllDocuments({
 
       {processed.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("explorerNoSearchResults")}</p>
-      ) : view === "grid" ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-          {processed.map((f) => {
-            const preview = f.signedUrl && isImageMime(f.mime);
-            const showEdit = mayEditRow(f.ownerId);
-            return (
-              <div
-                key={f.id}
-                className="grid aspect-square min-h-0 grid-rows-[1fr_auto] overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:border-foreground/20 hover:shadow-md"
-              >
-                <div className="relative min-h-0 overflow-hidden bg-muted/45">
-                  {preview ? (
-                    <img
-                      src={f.signedUrl!}
-                      alt={t("folderPreviewAlt", { title: f.title })}
-                      className="absolute inset-0 h-full w-full object-cover object-top"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <div className="flex h-full min-h-[4.5rem] items-center justify-center p-4">
-                      <FileText
-                        className="h-10 w-10 shrink-0 text-muted-foreground sm:h-12 sm:w-12"
-                        aria-hidden
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="flex shrink-0 flex-col gap-1 border-t border-border/60 bg-card p-2">
-                  <div className="flex flex-wrap items-start gap-1 gap-y-0.5">
-                    <CloudDocumentAudienceBadge
-                      audience={f.cloudAudience}
-                      className="text-[9px]"
-                    />
-                    <p className="line-clamp-2 min-w-0 flex-1 text-[11px] font-semibold leading-snug text-foreground sm:text-xs">
-                      {f.title}
-                    </p>
-                  </div>
-                  <p className="line-clamp-2 text-[10px] text-muted-foreground sm:line-clamp-3">
-                    {docMetaLine(f)}
-                  </p>
-                  {f.signedUrl ? (
-                    <div className="mt-1 flex w-full gap-1.5">
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 min-w-0 flex-1 text-[11px]"
-                      >
-                        <a
-                          href={f.signedUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                        >
-                          {t("folderDownload")}
-                        </a>
-                      </Button>
-                      {showEdit ? (
-                        <CloudEditDocumentButton
-                          locale={locale}
-                          file={{
-                            id: f.id,
-                            title: f.title,
-                            description: f.description,
-                            classId: f.classId,
-                            studentId: f.studentId,
-                            classFolderId: f.classFolderId,
-                            cloudAudience: f.cloudAudience,
-                          }}
-                          classOptions={classOptions}
-                          studentOptions={studentOptions}
-                          compact
-                        />
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="mt-1 flex w-full gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 min-w-0 flex-1 text-[11px]"
-                        disabled
-                      >
-                        {t("folderDownloadUnavailable")}
-                      </Button>
-                      {showEdit ? (
-                        <CloudEditDocumentButton
-                          locale={locale}
-                          file={{
-                            id: f.id,
-                            title: f.title,
-                            description: f.description,
-                            classId: f.classId,
-                            studentId: f.studentId,
-                            classFolderId: f.classFolderId,
-                            cloudAudience: f.cloudAudience,
-                          }}
-                          classOptions={classOptions}
-                          studentOptions={studentOptions}
-                          compact
-                        />
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border">
-          <ul className="divide-y divide-border">
-            {processed.map((f) => {
-              const preview = f.signedUrl && isImageMime(f.mime);
-              const showEdit = mayEditRow(f.ownerId);
-              return (
-                <li key={f.id}>
-                  <div className="flex flex-wrap items-center gap-3 p-3 sm:gap-4">
-                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/50 sm:h-16 sm:w-16">
-                      {preview ? (
-                        <img
-                          src={f.signedUrl!}
-                          alt=""
-                          className="h-full w-full object-cover object-top"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <FileText className="h-6 w-6 text-muted-foreground" aria-hidden />
+        <div className="space-y-10">
+          {grouped.map((group) => (
+            <section key={group.key} className="space-y-4">
+              <div
+                className={cn(
+                  "flex flex-col gap-3 border-b border-border/60 pb-3 sm:flex-row sm:items-center sm:justify-between",
+                )}
+              >
+                <div>
+                  <h3 className="text-base font-semibold leading-snug text-foreground">
+                    {group.label}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {t("explorerDocCount", { count: group.files.length })}
+                  </p>
+                </div>
+                {viewerIsDirector && group.ownerId ? (
+                  <CloudDeleteTeacherFolderButton
+                    locale={locale}
+                    ownerId={group.ownerId}
+                    teacherFolderLabel={group.label}
+                    fileCount={group.files.length}
+                  />
+                ) : null}
+              </div>
+
+              {view === "grid" ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {group.files.map((f) => {
+                    const preview = f.signedUrl && isImageMime(f.mime);
+                    const showEdit = mayEditRow(f.ownerId);
+                    return (
+                      <div
+                        key={f.id}
+                        className="grid aspect-square min-h-0 grid-rows-[1fr_auto] overflow-hidden rounded-xl border border-border bg-card shadow-sm transition hover:border-foreground/20 hover:shadow-md"
+                      >
+                        <div className="relative min-h-0 overflow-hidden bg-muted/45">
+                          {preview ? (
+                            <img
+                              src={f.signedUrl!}
+                              alt={t("folderPreviewAlt", { title: f.title })}
+                              className="absolute inset-0 h-full w-full object-cover object-top"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <div className="flex h-full min-h-[4.5rem] items-center justify-center p-4">
+                              <FileText
+                                className="h-10 w-10 shrink-0 text-muted-foreground sm:h-12 sm:w-12"
+                                aria-hidden
+                              />
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <div className="min-w-[140px] flex-1">
-                      <div className="flex flex-wrap items-center gap-2 gap-y-1">
-                        <CloudDocumentAudienceBadge audience={f.cloudAudience} />
-                        <p className="min-w-0 flex-1 font-medium leading-snug text-foreground">
-                          {f.title}
-                        </p>
+                        <div className="flex shrink-0 flex-col gap-1 border-t border-border/60 bg-card p-2">
+                          <div className="flex flex-wrap items-start gap-1 gap-y-0.5">
+                            <CloudDocumentAudienceBadge
+                              audience={f.cloudAudience}
+                              className="text-[9px]"
+                            />
+                            <p className="line-clamp-2 min-w-0 flex-1 text-[11px] font-semibold leading-snug text-foreground sm:text-xs">
+                              {f.title}
+                            </p>
+                          </div>
+                          <p className="line-clamp-2 text-[10px] text-muted-foreground sm:line-clamp-3">
+                            {docMetaLine(f)}
+                          </p>
+                          {f.signedUrl ? (
+                            <div className="mt-1 flex w-full flex-wrap gap-1.5">
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="secondary"
+                                className="h-8 min-w-0 flex-1 text-[11px]"
+                              >
+                                <a
+                                  href={f.signedUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download
+                                >
+                                  {t("folderDownload")}
+                                </a>
+                              </Button>
+                              {showEdit ? (
+                                <CloudEditDocumentButton
+                                  locale={locale}
+                                  file={{
+                                    id: f.id,
+                                    title: f.title,
+                                    description: f.description,
+                                    classId: f.classId,
+                                    studentId: f.studentId,
+                                    classFolderId: f.classFolderId,
+                                    cloudAudience: f.cloudAudience,
+                                  }}
+                                  classOptions={classOptions}
+                                  studentOptions={studentOptions}
+                                  compact
+                                />
+                              ) : null}
+                              {viewerIsDirector ? (
+                                <CloudDeleteCloudDocumentButton
+                                  locale={locale}
+                                  fileId={f.id}
+                                  fileTitle={f.title}
+                                  compact
+                                />
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="mt-1 flex w-full flex-wrap gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="h-8 min-w-0 flex-1 text-[11px]"
+                                disabled
+                              >
+                                {t("folderDownloadUnavailable")}
+                              </Button>
+                              {showEdit ? (
+                                <CloudEditDocumentButton
+                                  locale={locale}
+                                  file={{
+                                    id: f.id,
+                                    title: f.title,
+                                    description: f.description,
+                                    classId: f.classId,
+                                    studentId: f.studentId,
+                                    classFolderId: f.classFolderId,
+                                    cloudAudience: f.cloudAudience,
+                                  }}
+                                  classOptions={classOptions}
+                                  studentOptions={studentOptions}
+                                  compact
+                                />
+                              ) : null}
+                              {viewerIsDirector ? (
+                                <CloudDeleteCloudDocumentButton
+                                  locale={locale}
+                                  fileId={f.id}
+                                  fileTitle={f.title}
+                                  compact
+                                />
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {docMetaLine(f)}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground sm:gap-3">
-                      <span className="tabular-nums">{formatDate(f.createdAt)}</span>
-                      <span className="tabular-nums">
-                        {t("folderFileVersion", { version: f.version })}
-                      </span>
-                      {f.signedUrl ? (
-                        <Button asChild size="sm" variant="secondary" className="shrink-0">
-                          <a
-                            href={f.signedUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                          >
-                            {t("folderDownload")}
-                          </a>
-                        </Button>
-                      ) : (
-                        <Button size="sm" variant="secondary" disabled className="shrink-0">
-                          {t("folderDownloadUnavailable")}
-                        </Button>
-                      )}
-                      {showEdit ? (
-                        <CloudEditDocumentButton
-                          locale={locale}
-                          file={{
-                            id: f.id,
-                            title: f.title,
-                            description: f.description,
-                            classId: f.classId,
-                            studentId: f.studentId,
-                            classFolderId: f.classFolderId,
-                            cloudAudience: f.cloudAudience,
-                          }}
-                          classOptions={classOptions}
-                          studentOptions={studentOptions}
-                          compact
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-border">
+                  <ul className="divide-y divide-border">
+                    {group.files.map((f) => {
+                      const preview = f.signedUrl && isImageMime(f.mime);
+                      const showEdit = mayEditRow(f.ownerId);
+                      return (
+                        <li key={f.id}>
+                          <div className="flex flex-wrap items-center gap-3 p-3 sm:gap-4">
+                            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/50 sm:h-16 sm:w-16">
+                              {preview ? (
+                                <img
+                                  src={f.signedUrl!}
+                                  alt=""
+                                  className="h-full w-full object-cover object-top"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center">
+                                  <FileText
+                                    className="h-6 w-6 text-muted-foreground"
+                                    aria-hidden
+                                  />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-[140px] flex-1">
+                              <div className="flex flex-wrap items-center gap-2 gap-y-1">
+                                <CloudDocumentAudienceBadge audience={f.cloudAudience} />
+                                <p className="min-w-0 flex-1 font-medium leading-snug text-foreground">
+                                  {f.title}
+                                </p>
+                              </div>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {docMetaLine(f)}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground sm:gap-3">
+                              <span className="tabular-nums">{formatDate(f.createdAt)}</span>
+                              <span className="tabular-nums">
+                                {t("folderFileVersion", { version: f.version })}
+                              </span>
+                              {f.signedUrl ? (
+                                <Button
+                                  asChild
+                                  size="sm"
+                                  variant="secondary"
+                                  className="shrink-0"
+                                >
+                                  <a
+                                    href={f.signedUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    download
+                                  >
+                                    {t("folderDownload")}
+                                  </a>
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled
+                                  className="shrink-0"
+                                >
+                                  {t("folderDownloadUnavailable")}
+                                </Button>
+                              )}
+                              {showEdit ? (
+                                <CloudEditDocumentButton
+                                  locale={locale}
+                                  file={{
+                                    id: f.id,
+                                    title: f.title,
+                                    description: f.description,
+                                    classId: f.classId,
+                                    studentId: f.studentId,
+                                    classFolderId: f.classFolderId,
+                                    cloudAudience: f.cloudAudience,
+                                  }}
+                                  classOptions={classOptions}
+                                  studentOptions={studentOptions}
+                                  compact
+                                />
+                              ) : null}
+                              {viewerIsDirector ? (
+                                <CloudDeleteCloudDocumentButton
+                                  locale={locale}
+                                  fileId={f.id}
+                                  fileTitle={f.title}
+                                  compact
+                                />
+                              ) : null}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </section>
+          ))}
         </div>
       )}
     </div>

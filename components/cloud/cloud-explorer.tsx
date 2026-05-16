@@ -1,6 +1,13 @@
 "use client";
 
-import { Files, GraduationCap, Search, User, Users, FileText } from "lucide-react";
+import {
+  Files,
+  FileText,
+  GraduationCap,
+  Search,
+  User,
+  Users,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
@@ -81,14 +88,30 @@ export function CloudExplorer({
   }, [resolvedInitialTab]);
 
   const [query, setQuery] = useState("");
+  const [teacherFilter, setTeacherFilter] = useState<string>("__all__");
+
+  const teacherSelectOptions = useMemo(() => {
+    return [...teacherFolders].sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, locale, {
+        sensitivity: "base",
+      }),
+    );
+  }, [teacherFolders, locale]);
+
+  const teacherFolderFilterForAll =
+    viewerIsDirector && teacherFilter !== "__all__" ? teacherFilter : null;
 
   const filteredClasses = useMemo(() => {
     return classFolders.filter((c) => matchesQuery(c.displayLabel, query));
   }, [classFolders, query]);
 
   const filteredTeachers = useMemo(() => {
-    return teacherFolders.filter((p) => matchesQuery(p.displayName, query));
-  }, [teacherFolders, query]);
+    let list = teacherFolders.filter((p) => matchesQuery(p.displayName, query));
+    if (viewerIsDirector && teacherFilter !== "__all__") {
+      list = list.filter((p) => p.id === teacherFilter);
+    }
+    return list;
+  }, [teacherFolders, query, viewerIsDirector, teacherFilter]);
 
   const filteredStudents = useMemo(() => {
     return studentFolders.filter(
@@ -139,24 +162,54 @@ export function CloudExplorer({
           <label className="sr-only" htmlFor="cloud-explorer-search">
             {t("explorerSearchLabel")}
           </label>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              id="cloud-explorer-search"
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={
-                tab === "all" || tab === "myTeacherDocs"
-                  ? t("explorerSearchPlaceholderDocs")
-                  : t("explorerSearchPlaceholder")
-              }
-              autoComplete="off"
-              className="h-11 rounded-xl border-border/60 bg-background/95 pl-10 shadow-sm backdrop-blur-sm transition focus-visible:ring-2 focus-visible:ring-primary/25"
-            />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                id="cloud-explorer-search"
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={
+                  tab === "all" || tab === "myTeacherDocs"
+                    ? t("explorerSearchPlaceholderDocs")
+                    : t("explorerSearchPlaceholder")
+                }
+                autoComplete="off"
+                className="h-11 rounded-xl border-border/60 bg-background/95 pl-10 shadow-sm backdrop-blur-sm transition focus-visible:ring-2 focus-visible:ring-primary/25"
+              />
+            </div>
+            {viewerIsDirector &&
+            (tab === "all" || tab === "teacher") &&
+            teacherSelectOptions.length > 0 ? (
+              <div className="flex w-full shrink-0 flex-col gap-1 sm:w-auto sm:min-w-[220px]">
+                <label
+                  htmlFor="cloud-explorer-teacher-filter"
+                  className="sr-only"
+                >
+                  {t("explorerTeacherFilterLabel")}
+                </label>
+                <select
+                  id="cloud-explorer-teacher-filter"
+                  value={teacherFilter}
+                  onChange={(e) => setTeacherFilter(e.target.value)}
+                  className={cn(
+                    "h-11 w-full rounded-xl border border-border/60 bg-background/95 px-3 text-sm shadow-sm backdrop-blur-sm",
+                    "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25",
+                  )}
+                >
+                  <option value="__all__">{t("explorerTeacherFilterAll")}</option>
+                  {teacherSelectOptions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </div>
           <p className="text-xs text-muted-foreground">{t("explorerSearchHint")}</p>
         </div>
@@ -287,6 +340,7 @@ export function CloudExplorer({
           <CloudExplorerAllDocuments
             files={allDocuments}
             searchQuery={query}
+            teacherFolderFilterOwnerId={teacherFolderFilterForAll}
             locale={locale}
             viewerId={viewerId}
             viewerIsDirector={viewerIsDirector}

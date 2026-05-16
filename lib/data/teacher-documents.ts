@@ -4,6 +4,10 @@ import type { SessionUser } from "@/types";
 import { isDirector, isStaffAdmin } from "@/lib/roles";
 import { normalizeCloudDocumentAudience } from "@/lib/cloud-document-audience";
 import {
+  resolveTeacherDocumentsTrackingState,
+  type TeacherDocumentsTrackingState,
+} from "@/lib/data/teacher-documents-tracking";
+import {
   attachSignedUrlsToCloudFiles,
   type CloudFolderFileRow,
 } from "@/lib/data/school";
@@ -68,6 +72,52 @@ export type TeacherOnboardingRow = {
   teacher_documents_bundle_submitted_at: string | null;
   teacher_documents_approved_at: string | null;
 };
+
+export type { TeacherDocumentsTrackingState };
+export { resolveTeacherDocumentsTrackingState };
+
+/**
+ * Nombre de dossiers « complets et envoyés », en attente de validation direction
+ * (`submitted`), même logique que l’onglet Suivi de l’admin documents enseignants.
+ */
+export async function countTeacherDocumentsAwaitingValidation(): Promise<number> {
+  const admin = createAdminSupabase();
+  if (!admin) return 0;
+
+  const pendingRaw = await fetchPendingTeacherDocumentsProfiles(admin);
+  if (!pendingRaw.length) return 0;
+
+  const pendingIds = pendingRaw.map((p) => p.id);
+  const { data: reqs } = await admin
+    .from("teacher_document_requests")
+    .select("teacher_profile_id, file_id")
+    .in("teacher_profile_id", pendingIds);
+
+  const meta = new Map<string, { total: number; filled: number }>();
+  for (const id of pendingIds) {
+    meta.set(id, { total: 0, filled: 0 });
+  }
+  for (const r of reqs ?? []) {
+    const id = r.teacher_profile_id as string;
+    const m = meta.get(id);
+    if (!m) continue;
+    m.total += 1;
+    if (r.file_id) m.filled += 1;
+  }
+
+  let count = 0;
+  for (const p of pendingRaw) {
+    const m = meta.get(p.id) ?? { total: 0, filled: 0 };
+    const state = resolveTeacherDocumentsTrackingState({
+      totalRequests: m.total,
+      filledRequests: m.filled,
+      teacher_documents_bundle_submitted_at:
+        p.teacher_documents_bundle_submitted_at,
+    });
+    if (state === "submitted") count += 1;
+  }
+  return count;
+}
 
 /** Nouvelles recrues sans accès complet. */
 export async function fetchPendingTeacherDocumentsProfiles(

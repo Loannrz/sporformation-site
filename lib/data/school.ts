@@ -1356,12 +1356,27 @@ export async function fetchCloudExplorerFolders(
   }));
 
   let teachers: CloudExplorerTeacherFolder[] = [];
-  if (viewerRole !== "ELEVE" && !profErr && profRows && !scopeSet) {
-    teachers = profRows.map((p) => ({
-      id: p.id,
-      displayName: `${p.first_name} ${p.last_name}`.trim() || "—",
-      documentCount: ownerCounts.get(p.id) ?? 0,
-    }));
+  if (viewerRole !== "ELEVE" && !profErr && profRows) {
+    type ProfRow = { id: string; first_name: string; last_name: string };
+    const profList = profRows as ProfRow[];
+    if (!scopeSet) {
+      teachers = profList.map((p) => ({
+        id: p.id,
+        displayName: `${p.first_name} ${p.last_name}`.trim() || "—",
+        documentCount: ownerCounts.get(p.id) ?? 0,
+      }));
+    } else if (viewerIdForScope) {
+      const me = profList.find((p) => p.id === viewerIdForScope);
+      if (me) {
+        teachers = [
+          {
+            id: me.id,
+            displayName: `${me.first_name} ${me.last_name}`.trim() || "—",
+            documentCount: ownerCounts.get(me.id) ?? 0,
+          },
+        ];
+      }
+    }
   }
 
   let students: CloudExplorerStudentFolder[] = [];

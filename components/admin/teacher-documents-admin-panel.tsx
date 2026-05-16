@@ -27,6 +27,10 @@ import type {
   TeacherDocumentTemplateRow,
   TeacherOnboardingRow,
 } from "@/lib/data/teacher-documents";
+import {
+  resolveTeacherDocumentsTrackingState,
+  type TeacherDocumentsTrackingState,
+} from "@/lib/data/teacher-documents-tracking";
 import { isDirector } from "@/lib/roles";
 import {
   approveTeacherDocumentsAccessAction,
@@ -59,18 +63,8 @@ type PendingUi = TeacherOnboardingRow & {
   filledRequests: number;
 };
 
-type StateKey = "missing" | "partial" | "submitted" | "ready" | "empty";
-
-function resolveState(p: PendingUi): StateKey {
-  if (p.totalRequests === 0) return "empty";
-  if (p.filledRequests === 0) return "missing";
-  if (p.filledRequests < p.totalRequests) return "partial";
-  if (p.teacher_documents_bundle_submitted_at) return "submitted";
-  return "ready";
-}
-
 const STATE_TONE: Record<
-  StateKey,
+  TeacherDocumentsTrackingState,
   {
     badgeClass: string;
     barClass: string;
@@ -396,7 +390,7 @@ export function TeacherDocumentsAdminPanel({
             ) : (
               <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {filteredPending.map((p) => {
-                  const state = resolveState(p);
+                  const state = resolveTeacherDocumentsTrackingState(p);
                   const tone = STATE_TONE[state];
                   const progress = p.totalRequests
                     ? Math.round((p.filledRequests / p.totalRequests) * 100)

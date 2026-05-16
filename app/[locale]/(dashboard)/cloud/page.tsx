@@ -142,8 +142,12 @@ export default async function CloudPage({
         viewer={user}
         viewerId={user.id}
         viewerIsDirector={establishmentScope}
-        hideExplorerSearch={!establishmentScope}
-        showTeacherExplorerTab={establishmentScope}
+        hideExplorerSearch={false}
+        showTeacherExplorerTab={
+          establishmentScope ||
+          user.role === "PROFESSEUR" ||
+          user.role === "PROF_PRINCIPAL"
+        }
         initialExplorerTab={initialExplorerTab}
         classOptions={classOptions}
         studentOptions={studentOptions}

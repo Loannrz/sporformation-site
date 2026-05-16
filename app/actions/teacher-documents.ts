@@ -17,6 +17,11 @@ import {
   fetchTeacherDocumentRequestsForProfile,
   fetchTeacherDocumentTemplates,
 } from "@/lib/data/teacher-documents";
+import { normalizeCloudDocumentAudience } from "@/lib/cloud-document-audience";
+import {
+  attachSignedUrlsToCloudFiles,
+  type CloudFolderFileRow,
+} from "@/lib/data/school";
 
 const BUCKET = "documents";
 const MAX_BYTES = 50 * 1024 * 1024;
@@ -568,6 +573,84 @@ export async function resetTeacherDocumentsBundleAction(
   revalidatePath(`/${locale}/administration/comptes/${teacherProfileId}`);
   revalidatePath(`/${locale}/documents-a-fournir`);
   return { ok: true };
+}
+
+/** URL signée pour consulter ou télécharger une pièce déposée (fiche enseignant admin). */
+export async function getTeacherDocumentRequestSignedUrlAction(
+  _locale: AppLocale,
+  input: { requestId: string; teacherProfileId: string },
+): Promise<
+  | { ok: true; signedUrl: string; title: string; mime: string | null }
+  | {
+      ok: false;
+      error: "UNAUTH" | "FORBIDDEN" | "NO_SERVICE" | "NOT_FOUND" | "NO_FILE";
+    }
+> {
+  const user = await getSessionUser();
+  if (!user || !canManageTeacherAccounts(user)) {
+    return { ok: false, error: "UNAUTH" };
+  }
+
+  const admin = createAdminSupabase();
+  if (!admin) return { ok: false, error: "NO_SERVICE" };
+
+  const { data: reqRow } = await admin
+    .from("teacher_document_requests")
+    .select("id, teacher_profile_id, file_id")
+    .eq("id", input.requestId)
+    .maybeSingle();
+
+  if (!reqRow || reqRow.teacher_profile_id !== input.teacherProfileId) {
+    return { ok: false, error: "NOT_FOUND" };
+  }
+
+  const fileId = reqRow.file_id as string | null;
+  if (!fileId) return { ok: false, error: "NO_FILE" };
+
+  const { data: teacher } = await admin
+    .from("profiles")
+    .select("base_role")
+    .eq("id", input.teacherProfileId)
+    .maybeSingle();
+
+  if (!teacher) return { ok: false, error: "FORBIDDEN" };
+
+  const baseRole = teacher.base_role as string;
+  if (
+    user.role === "ADMINISTRATEUR" &&
+    baseRole !== "PROFESSEUR" &&
+    baseRole !== "PROF_PRINCIPAL"
+  ) {
+    return { ok: false, error: "FORBIDDEN" };
+  }
+
+  const { data: f } = await admin.from("files").select("*").eq("id", fileId).maybeSingle();
+  if (!f) return { ok: false, error: "NOT_FOUND" };
+
+  const row: CloudFolderFileRow = {
+    id: fileId,
+    title: (f.title as string)?.trim() || "document",
+    description: (f.description as string) ?? "",
+    mime: (f.mime as string | null) ?? null,
+    createdAt: new Date(f.created_at as string).toISOString(),
+    version: 1,
+    cloudAudience: normalizeCloudDocumentAudience(f.cloud_audience as string),
+    classId: (f.class_id as string | null) ?? null,
+    ownerId: (f.owner_id as string | null) ?? null,
+    studentId: (f.student_id as string | null) ?? null,
+    classFolderId: (f.class_folder_id as string | null) ?? null,
+    storagePath: (f.current_path as string) || null,
+  };
+
+  const [withUrl] = await attachSignedUrlsToCloudFiles([row]);
+  if (!withUrl?.signedUrl) return { ok: false, error: "NO_SERVICE" };
+
+  return {
+    ok: true,
+    signedUrl: withUrl.signedUrl,
+    title: withUrl.title,
+    mime: withUrl.mime,
+  };
 }
 
 export async function seedDefaultTeacherDocumentTemplatesAction(locale: AppLocale): Promise<

@@ -28,6 +28,7 @@ import {
   fetchAdminSanctionsNewCount,
 } from "@/lib/data/sanctions-admin";
 import { fetchSiteLeadPendingTotal } from "@/lib/data/site-lead-forms";
+import { countTeacherDocumentsAwaitingValidation } from "@/lib/data/teacher-documents";
 import {
   canOpenAdministrationHub,
   isPedago,
@@ -64,11 +65,14 @@ export default async function AdminHubPage({
 
   const director = isDirector(user);
 
-  const [sanctionsActiveCount, sanctionsNewCount, leadPending] =
+  const [sanctionsActiveCount, sanctionsNewCount, leadPending, teacherDocsPending] =
     await Promise.all([
       fetchActiveSanctionsCount(),
       fetchAdminSanctionsNewCount(user.id),
       fetchSiteLeadPendingTotal(),
+      isStaffAdmin(user)
+        ? countTeacherDocumentsAwaitingValidation()
+        : Promise.resolve(0),
     ]);
 
   const teacherDocsCard: HubCard = {
@@ -76,7 +80,7 @@ export default async function AdminHubPage({
     title: t("teacherDocsTitle"),
     desc: t("teacherDocsDesc"),
     Icon: FileText,
-    badgeCount: 0,
+    badgeCount: teacherDocsPending,
   };
 
   /** Cartes sans « Documents enseignants » (réordonnancement directeur : pédago → documents → historique). */
