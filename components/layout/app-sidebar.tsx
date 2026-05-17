@@ -38,6 +38,7 @@ type NavLinkShellProps = {
   sanctionsReminderCount: number;
   leadFormsPendingCount: number;
   teacherDocumentsPendingCount: number;
+  inscriptionSubmissionsPendingCount: number;
   linkCls: (active: boolean, iconOnly: boolean) => string;
   onNavigate: () => void;
 };
@@ -53,6 +54,7 @@ function SidebarNavLinks({
   sanctionsReminderCount,
   leadFormsPendingCount,
   teacherDocumentsPendingCount,
+  inscriptionSubmissionsPendingCount,
   linkCls,
   onNavigate,
 }: NavLinkShellProps) {
@@ -85,7 +87,9 @@ function SidebarNavLinks({
           item.labelKey === "adminSanctions" && sanctionsReminderCount > 0;
         const adminPendingTotal =
           item.labelKey === "admin"
-            ? leadFormsPendingCount + teacherDocumentsPendingCount
+            ? leadFormsPendingCount +
+              teacherDocumentsPendingCount +
+              inscriptionSubmissionsPendingCount
             : 0;
         const showAdminNavBadge = item.labelKey === "admin" && adminPendingTotal > 0;
 
@@ -96,11 +100,23 @@ function SidebarNavLinks({
 
         const adminNavAriaLabel = (() => {
           if (item.labelKey !== "admin" || !showAdminNavBadge) return undefined;
-          const l = leadFormsPendingCount;
-          const d = teacherDocumentsPendingCount;
-          if (l > 0 && d > 0) return t("adminNavPendingBoth", { lead: l, teacher: d });
-          if (l > 0) return t("leadFormsPendingNavAria", { count: l });
-          return t("teacherDocsPendingNavAria", { count: d });
+          const segments: string[] = [];
+          if (leadFormsPendingCount > 0) {
+            segments.push(t("leadFormsPendingNavAria", { count: leadFormsPendingCount }));
+          }
+          if (teacherDocumentsPendingCount > 0) {
+            segments.push(
+              t("teacherDocsPendingNavAria", { count: teacherDocumentsPendingCount }),
+            );
+          }
+          if (inscriptionSubmissionsPendingCount > 0) {
+            segments.push(
+              t("inscriptionSubmissionsPendingNavAria", {
+                count: inscriptionSubmissionsPendingCount,
+              }),
+            );
+          }
+          return segments.join(" · ");
         })();
 
         const showAnyBadge =
@@ -179,6 +195,8 @@ type Props = {
   leadFormsPendingCount?: number;
   /** Dossiers enseignants en attente de validation (direction / admin). */
   teacherDocumentsPendingCount?: number;
+  /** Candidatures envoyées en attente de traitement (permission gestion inscriptions). */
+  inscriptionSubmissionsPendingCount?: number;
   /** Données pour la modale « Avertissement » (null si non chargé). */
   disciplineOptions: DisciplineDialogOptions | null;
 };
@@ -189,6 +207,7 @@ export function AppSidebar({
   sanctionsReminderCount = 0,
   leadFormsPendingCount = 0,
   teacherDocumentsPendingCount = 0,
+  inscriptionSubmissionsPendingCount = 0,
   disciplineOptions,
 }: Props) {
   const pathname = usePathname();
@@ -262,6 +281,7 @@ export function AppSidebar({
       sanctionsReminderCount,
       leadFormsPendingCount,
       teacherDocumentsPendingCount,
+      inscriptionSubmissionsPendingCount,
       linkCls,
       onNavigate: () => setDrawerOpen(false),
     }) satisfies Omit<NavLinkShellProps, "searchParams">;

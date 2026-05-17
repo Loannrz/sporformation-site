@@ -30,8 +30,10 @@ import {
 } from "@/lib/data/sanctions-admin";
 import { fetchSiteLeadPendingTotal } from "@/lib/data/site-lead-forms";
 import { countTeacherDocumentsAwaitingValidation } from "@/lib/data/teacher-documents";
+import { fetchInscriptionSubmissionsBacklogTotal } from "@/lib/data/inscription-submissions-admin";
 import {
   canOpenAdministrationHub,
+  canManageInscriptionSubmissions,
   isPedago,
   pedagoCanAccessHubHref,
 } from "@/lib/pedago-access";
@@ -66,13 +68,16 @@ export default async function AdminHubPage({
 
   const director = isDirector(user);
 
-  const [sanctionsActiveCount, sanctionsNewCount, leadPending, teacherDocsPending] =
+  const [sanctionsActiveCount, sanctionsNewCount, leadPending, teacherDocsPending, inscriptionBacklog] =
     await Promise.all([
       fetchActiveSanctionsCount(),
       fetchAdminSanctionsNewCount(user.id),
       fetchSiteLeadPendingTotal(),
       isStaffAdmin(user)
         ? countTeacherDocumentsAwaitingValidation()
+        : Promise.resolve(0),
+      canManageInscriptionSubmissions(user)
+        ? fetchInscriptionSubmissionsBacklogTotal()
         : Promise.resolve(0),
     ]);
 
@@ -140,7 +145,7 @@ export default async function AdminHubPage({
       title: t("inscriptionSubmissionsTitle"),
       desc: t("inscriptionSubmissionsDesc"),
       Icon: ClipboardCheck,
-      badgeCount: 0,
+      badgeCount: inscriptionBacklog,
     },
     {
       href: "/admin/history",

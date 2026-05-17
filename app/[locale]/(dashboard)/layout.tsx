@@ -13,6 +13,7 @@ import { fetchAdminSanctionsNewCount } from "@/lib/data/sanctions-admin";
 import { fetchSiteLeadPendingTotal } from "@/lib/data/site-lead-forms";
 import { countTeacherDocumentsAwaitingValidation } from "@/lib/data/teacher-documents";
 import {
+  canManageInscriptionSubmissions,
   canManageLeadForms,
   canManageSanctionsHubAsStaff,
 } from "@/lib/pedago-access";
@@ -20,6 +21,7 @@ import {
   getCachedOpenVoluntaryRecipientsPending,
   getCachedVoluntaryRecipientsInvalidated,
 } from "@/lib/data/teacher-voluntary-pending-cached";
+import { fetchInscriptionSubmissionsBacklogTotal } from "@/lib/data/inscription-submissions-admin";
 
 export default async function DashboardGroupLayout({
   children,
@@ -58,6 +60,11 @@ export default async function DashboardGroupLayout({
         ? await countTeacherDocumentsAwaitingValidation()
         : 0;
 
+    const inscriptionSubmissionsPendingCount =
+      !gateDocs && canManageInscriptionSubmissions(user)
+        ? await fetchInscriptionSubmissionsBacklogTotal()
+        : 0;
+
     const voluntaryDocPending =
       user.role === "PROFESSEUR" || user.role === "PROF_PRINCIPAL"
         ? await getCachedOpenVoluntaryRecipientsPending(user.id)
@@ -75,6 +82,7 @@ export default async function DashboardGroupLayout({
         sanctionsReminderCount={sanctionsReminderCount}
         leadFormsPendingCount={leadFormsPendingCount}
         teacherDocumentsPendingCount={teacherDocumentsPendingCount}
+        inscriptionSubmissionsPendingCount={inscriptionSubmissionsPendingCount}
         locale={params.locale}
         voluntaryDocPending={voluntaryDocPending}
         voluntaryDocInvalidated={voluntaryDocInvalidated}

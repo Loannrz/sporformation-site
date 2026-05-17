@@ -113,7 +113,7 @@
     "adminLeadForms": "Contact requests",
     "leadFormsPendingNavAria": "{count} pending contact request(s)",
     "teacherDocsPendingNavAria": "{count, plural, one {# teacher file package to approve} other {# teacher file packages to approve}}",
-    "adminNavPendingBoth": "{lead} contact request(s) · {teacher} teacher file package(s) to approve",
+    "inscriptionSubmissionsPendingNavAria": "{count, plural, one {# application to review} other {# applications to review}}",
     "settings": "Settings",
     "profile": "Profile"
   },

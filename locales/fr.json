@@ -113,7 +113,7 @@
     "adminLeadForms": "Demandes de contact",
     "leadFormsPendingNavAria": "{count} demande(s) de contact à traiter",
     "teacherDocsPendingNavAria": "{count, plural, one {# dossier enseignant à valider} other {# dossiers enseignants à valider}}",
-    "adminNavPendingBoth": "{lead} demande(s) de contact · {teacher} dossier(s) enseignant(s) à valider",
+    "inscriptionSubmissionsPendingNavAria": "{count, plural, one {# candidature à traiter} other {# candidatures à traiter}}",
     "settings": "Paramètres",
     "profile": "Profil"
   },

@@ -5,6 +5,7 @@
 import type { SubmissionFilesMap } from "@/lib/inscription-submission-progress";
 import { computeInscriptionProgress } from "@/lib/inscription-submission-progress";
 import { INSCRIPTION_PUBLIC_UPLOAD_BUCKET_NAME } from "@/lib/inscription-public-upload-url";
+import { createAdminSupabase } from "@/lib/supabase/admin";
 
 export type SubmissionStatusPortal = "draft" | "submitted";
 
@@ -415,6 +416,30 @@ function candidateAnswerField(
   const fromDb = trimSubmissionText(row[columnKey]);
   if (fromDb) return fromDb;
   return trimSubmissionText(answers[answerFieldId]);
+}
+
+/**
+ * Dossiers « Envoyés » encore à examiner par la direction (`pending` / pas encore de décision).
+ * Aligné sur le préréglage « À traiter » des listes admin.
+ */
+export async function fetchInscriptionSubmissionsBacklogTotal(): Promise<number> {
+  const admin = createAdminSupabase();
+  if (!admin) return 0;
+
+  const { count, error } = await admin
+    .from("inscription_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "submitted")
+    .or("admin_review_status.is.null,admin_review_status.eq.pending");
+
+  if (error) {
+    console.error(
+      "[inscription_submissions] fetchInscriptionSubmissionsBacklogTotal:",
+      error.message ?? error,
+    );
+    return 0;
+  }
+  return count ?? 0;
 }
 
 /** Compteurs tableau de bord (mêmes filtres que les listes hors filtre décisionnel). */

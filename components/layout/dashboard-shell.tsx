@@ -21,6 +21,7 @@ export function DashboardShell({
   sanctionsReminderCount = 0,
   leadFormsPendingCount = 0,
   teacherDocumentsPendingCount = 0,
+  inscriptionSubmissionsPendingCount = 0,
   disciplineOptions = null,
   locale,
   voluntaryDocPending = [],
@@ -36,6 +37,8 @@ export function DashboardShell({
   leadFormsPendingCount?: number;
   /** Dossiers enseignants envoyés en attente de validation (direction / admin). */
   teacherDocumentsPendingCount?: number;
+  /** Dossiers d'inscription envoyés en attente de décision (permission gestion candidatures). */
+  inscriptionSubmissionsPendingCount?: number;
   disciplineOptions?: DisciplineDialogOptions | null;
   locale: AppLocale;
   /** Demandes de documents non bloquantes encore à déposer (enseignants). */
@@ -54,6 +57,7 @@ export function DashboardShell({
         sanctionsReminderCount={sanctionsReminderCount}
         leadFormsPendingCount={leadFormsPendingCount}
         teacherDocumentsPendingCount={teacherDocumentsPendingCount}
+        inscriptionSubmissionsPendingCount={inscriptionSubmissionsPendingCount}
         disciplineOptions={disciplineOptions}
       />
       <div className="flex min-h-screen flex-1 flex-col lg:overflow-x-hidden">
