@@ -16,6 +16,10 @@ import {
   canManageLeadForms,
   canManageSanctionsHubAsStaff,
 } from "@/lib/pedago-access";
+import {
+  getCachedOpenVoluntaryRecipientsPending,
+  getCachedVoluntaryRecipientsInvalidated,
+} from "@/lib/data/teacher-voluntary-pending-cached";
 
 export default async function DashboardGroupLayout({
   children,
@@ -54,6 +58,15 @@ export default async function DashboardGroupLayout({
         ? await countTeacherDocumentsAwaitingValidation()
         : 0;
 
+    const voluntaryDocPending =
+      user.role === "PROFESSEUR" || user.role === "PROF_PRINCIPAL"
+        ? await getCachedOpenVoluntaryRecipientsPending(user.id)
+        : [];
+    const voluntaryDocInvalidated =
+      user.role === "PROFESSEUR" || user.role === "PROF_PRINCIPAL"
+        ? await getCachedVoluntaryRecipientsInvalidated(user.id)
+        : [];
+
     return (
       <DashboardShell
         user={user}
@@ -63,6 +76,8 @@ export default async function DashboardGroupLayout({
         leadFormsPendingCount={leadFormsPendingCount}
         teacherDocumentsPendingCount={teacherDocumentsPendingCount}
         locale={params.locale}
+        voluntaryDocPending={voluntaryDocPending}
+        voluntaryDocInvalidated={voluntaryDocInvalidated}
       >
         {children}
       </DashboardShell>

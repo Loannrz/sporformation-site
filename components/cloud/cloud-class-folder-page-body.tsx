@@ -2,9 +2,8 @@
 
 import { ArrowLeft, ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "@/i18n/navigation";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -16,7 +15,6 @@ import { fileMatchesCloudClassFolderAudienceTab } from "@/lib/cloud-document-aud
 import type { CloudClassFolderAudienceTab } from "@/lib/cloud-document-audience";
 import { cn } from "@/lib/utils";
 import type {
-  ClassCloudAudienceIndexRow,
   ClassCloudFolderRow,
   CloudFolderFileWithUrl,
   CloudStudentUploadOption,
@@ -54,7 +52,6 @@ export function CloudClassFolderPageBody({
   folderLinkBase,
   currentFolderId,
   classFolderRows,
-  audienceIndexRows,
   subfolders,
   files,
   viewerId,
@@ -64,7 +61,6 @@ export function CloudClassFolderPageBody({
   studentOptions,
   folderSlug,
   folderOptionsForClass,
-  initialAudienceTab,
   studentSubfolderCreate,
   studentDepositNav,
 }: {
@@ -75,7 +71,6 @@ export function CloudClassFolderPageBody({
   folderLinkBase: string;
   currentFolderId: string | null;
   classFolderRows: ClassCloudFolderRow[];
-  audienceIndexRows: ClassCloudAudienceIndexRow[];
   subfolders: ClassCloudFolderRow[];
   files: CloudFolderFileWithUrl[];
   viewerId: string;
@@ -86,7 +81,6 @@ export function CloudClassFolderPageBody({
   studentOptions: CloudStudentUploadOption[];
   folderSlug?: string | null;
   folderOptionsForClass?: FolderOptionsForClass;
-  initialAudienceTab: CloudClassFolderAudienceTab;
   studentSubfolderCreate?: {
     classId: string;
     parentFolderId: string;
@@ -98,15 +92,13 @@ export function CloudClassFolderPageBody({
   };
 }) {
   const t = useTranslations("cloud");
-  const [audienceTab, setAudienceTab] =
-    useState<CloudClassFolderAudienceTab>(initialAudienceTab);
 
   const filteredFiles = useMemo(() => {
     if (viewerRole === "ELEVE") {
       return filterFilesForTab(files, "students");
     }
-    return filterFilesForTab(files, audienceTab);
-  }, [files, audienceTab, viewerRole]);
+    return files;
+  }, [files, viewerRole]);
 
   const accessibleFolderSet = useMemo(
     () =>
@@ -121,7 +113,7 @@ export function CloudClassFolderPageBody({
       if (!accessibleFolderSet) return [];
       return subfolders.filter((sf) => accessibleFolderSet.has(sf.id));
     }
-    /* Le personnel doit voir toute l’arborescence (dont les dossiers vides et le dossier système élèves) ; les onglets ci-dessus filtrent uniquement la liste des fichiers. */
+    /* Le personnel voit toute l’arborescence (dont les dossiers vides et le dossier système élèves). La liste fichiers élève est limitée aux documents « cours ». */
     return subfolders;
   }, [viewerRole, subfolders, accessibleFolderSet]);
 
@@ -135,21 +127,6 @@ export function CloudClassFolderPageBody({
     currentFolderId !== null &&
     currentFolderId !== studentDepositNav.landingFolderId;
 
-  const hasAdminInIndex = useMemo(
-    () =>
-      audienceIndexRows.some((r) =>
-        fileMatchesCloudClassFolderAudienceTab(r.cloudAudience, "administration"),
-      ),
-    [audienceIndexRows],
-  );
-  const hasStudentsInIndex = useMemo(
-    () =>
-      audienceIndexRows.some((r) =>
-        fileMatchesCloudClassFolderAudienceTab(r.cloudAudience, "students"),
-      ),
-    [audienceIndexRows],
-  );
-
   return (
     <Card className="overflow-hidden rounded-2xl border-border/60 bg-card shadow-lg shadow-black/[0.03] ring-1 ring-black/[0.03] dark:shadow-black/25 dark:ring-white/[0.06]">
       <CardHeader className="flex flex-col gap-4 border-b border-border/50 bg-gradient-to-br from-sky-500/[0.06] via-muted/30 to-muted/10 p-6 pb-6 dark:from-sky-500/10 dark:via-muted/20 dark:to-muted/5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
@@ -161,72 +138,22 @@ export function CloudClassFolderPageBody({
             <CardDescription className="text-base">{subtitle}</CardDescription>
           ) : null}
         </div>
-        <div className="flex w-full shrink-0 flex-col gap-2 sm:max-w-[min(100%,22rem)] sm:items-end">
-          <div
-            className={cn(
-              "flex w-full flex-wrap gap-1.5 sm:justify-end",
-              viewerRole !== "ELEVE" &&
-                "rounded-xl border border-border/50 bg-background/60 p-1 shadow-inner dark:bg-background/40",
-            )}
-            role={viewerRole !== "ELEVE" ? "group" : undefined}
-            aria-label={
-              viewerRole !== "ELEVE"
-                ? t("classFolderAudienceGroupLabel")
-                : undefined
-            }
-          >
-            {studentSubfolderCreate ? (
+        {studentSubfolderCreate ? (
+          <div className="flex w-full shrink-0 flex-col gap-2 sm:max-w-[min(100%,22rem)] sm:items-end">
+            <div
+              className={cn(
+                "flex w-full flex-wrap gap-1.5 sm:justify-end rounded-xl border border-border/50 bg-background/60 p-1 shadow-inner dark:bg-background/40",
+              )}
+              role="group"
+            >
               <CloudStudentInboxSubfolderButton
                 locale={locale}
                 classId={studentSubfolderCreate.classId}
                 parentFolderId={studentSubfolderCreate.parentFolderId}
               />
-            ) : null}
-            {viewerRole !== "ELEVE" ? (
-              <>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={
-                    audienceTab === "students" ? "secondary" : "ghost"
-                  }
-                  disabled={!hasStudentsInIndex}
-                  className={cn(
-                    "rounded-lg text-xs sm:text-sm",
-                    audienceTab === "students" &&
-                      "border border-foreground/10 bg-muted/95 shadow-sm dark:bg-muted",
-                  )}
-                  onClick={() => setAudienceTab("students")}
-                >
-                  {t("classFolderAudienceFilterStudents")}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={
-                    audienceTab === "administration" ? "secondary" : "ghost"
-                  }
-                  disabled={!hasAdminInIndex}
-                  className={cn(
-                    "rounded-lg text-xs sm:text-sm",
-                    audienceTab === "administration" &&
-                      "border border-foreground/10 bg-muted/95 shadow-sm dark:bg-muted",
-                  )}
-                  onClick={() => setAudienceTab("administration")}
-                >
-                  {t("classFolderAudienceFilterAdmin")}
-                </Button>
-              </>
-            ) : null}
+            </div>
           </div>
-          {viewerRole !== "ELEVE" ? (
-            <p className="text-[11px] leading-snug text-muted-foreground sm:text-right sm:text-xs">
-              {audienceTab === "administration"
-                ? t("classFolderAudienceFilterHintAdmin")
-                : t("classFolderAudienceFilterHintStudents")}
-            </p>
-          ) : null}
-        </div>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-10 p-6 sm:p-8">
         {subfolders.length > 0 ? (
@@ -347,7 +274,7 @@ export function CloudClassFolderPageBody({
           {filteredFiles.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-6 py-14 text-center">
               <p className="text-sm text-muted-foreground">
-                {files.length > 0
+                {viewerRole === "ELEVE" && files.length > 0
                   ? t("classFolderAudienceNoMatchingFiles")
                   : t("folderNoDocuments")}
               </p>

@@ -10,6 +10,10 @@ import { fetchMessagingConversationsList } from "@/lib/data/messaging";
 import { canAccessSanctionsHub, hasPermission } from "@/lib/permissions";
 import { getSessionUser } from "@/lib/session-server";
 import { enforcePedagoNav } from "@/lib/pedago-access";
+import {
+  getCachedOpenVoluntaryRecipientsPending,
+  getCachedVoluntaryRecipientsInvalidated,
+} from "@/lib/data/teacher-voluntary-pending-cached";
 import type { AppLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +35,15 @@ export default async function DashboardPage({
   const localeShort = locale === "fr" ? "fr" : "en";
   const showEstablishmentStats =
     user.role === "DIRECTEUR" || user.role === "ADMINISTRATEUR";
+
+  const voluntaryPending =
+    user.role === "PROFESSEUR" || user.role === "PROF_PRINCIPAL"
+      ? await getCachedOpenVoluntaryRecipientsPending(user.id)
+      : [];
+  const voluntaryInvalidated =
+    user.role === "PROFESSEUR" || user.role === "PROF_PRINCIPAL"
+      ? await getCachedVoluntaryRecipientsInvalidated(user.id)
+      : [];
 
   const [
     announcements,
@@ -77,6 +90,8 @@ export default async function DashboardPage({
       messagingPreview={messagingPreview}
       unreadTotal={unreadTotal}
       studentClass={studentClass}
+      voluntaryPending={voluntaryPending}
+      voluntaryInvalidated={voluntaryInvalidated}
     />
   );
 }

@@ -7,6 +7,12 @@ import { ForcedPasswordModal } from "@/components/auth/forced-password-modal";
 import type { DisciplineDialogOptions } from "@/lib/data/school";
 import type { AppLocale } from "@/i18n/routing";
 import { AdminSanctionsSessionToast } from "@/components/admin/admin-sanctions-session-toast";
+import { VoluntaryDocumentSessionDialog } from "@/components/dashboard/voluntary-document-session-dialog";
+import { VoluntaryDocumentInvalidatedDialog } from "@/components/dashboard/voluntary-document-invalidated-dialog";
+import type {
+  VoluntaryRecipientInvalidatedForUser,
+  VoluntaryRecipientPendingForUser,
+} from "@/lib/data/teacher-voluntary-documents";
 
 export function DashboardShell({
   user,
@@ -17,6 +23,8 @@ export function DashboardShell({
   teacherDocumentsPendingCount = 0,
   disciplineOptions = null,
   locale,
+  voluntaryDocPending = [],
+  voluntaryDocInvalidated = [],
 }: {
   user: SessionUser;
   children: ReactNode;
@@ -24,17 +32,22 @@ export function DashboardShell({
   notificationCount?: number;
   /** Badge hub sanctions / pastille avertissement (personnel administration). */
   sanctionsReminderCount?: number;
-  /** Demandes formulaire vitrine non traitées (directeur uniquement). */
+  /** Demandes de contact non traitées (directeur uniquement). */
   leadFormsPendingCount?: number;
   /** Dossiers enseignants envoyés en attente de validation (direction / admin). */
   teacherDocumentsPendingCount?: number;
   disciplineOptions?: DisciplineDialogOptions | null;
   locale: AppLocale;
+  /** Demandes de documents non bloquantes encore à déposer (enseignants). */
+  voluntaryDocPending?: VoluntaryRecipientPendingForUser[];
+  voluntaryDocInvalidated?: VoluntaryRecipientInvalidatedForUser[];
 }) {
   return (
     <div className="flex min-h-screen flex-col bg-gradient-to-br from-muted/55 via-background to-muted/35 dark:from-muted/30 dark:via-background dark:to-muted/15 lg:flex-row">
       <ForcedPasswordModal mustSetPassword={user.mustSetPassword === true} />
       <AdminSanctionsSessionToast locale={locale} count={sanctionsReminderCount} />
+      <VoluntaryDocumentInvalidatedDialog items={voluntaryDocInvalidated} />
+      <VoluntaryDocumentSessionDialog locale={locale} items={voluntaryDocPending} />
       <AppSidebar
         user={user}
         notificationCount={notificationCount}

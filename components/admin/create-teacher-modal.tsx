@@ -50,6 +50,8 @@ export function CreateTeacherModal({
   const [subjectsCsv, setSubjectsCsv] = useState("");
   const [principalClassIds, setPrincipalClassIds] = useState<string[]>([]);
   const [assignedClassIds, setAssignedClassIds] = useState<string[]>([]);
+  const [directorElevatedPrivilegesConfirmed, setDirectorElevatedPrivilegesConfirmed] =
+    useState(false);
 
   const reset = () => {
     setEmail("");
@@ -60,6 +62,7 @@ export function CreateTeacherModal({
     setSubjectsCsv("");
     setPrincipalClassIds([]);
     setAssignedClassIds([]);
+    setDirectorElevatedPrivilegesConfirmed(false);
     setError(null);
   };
 
@@ -74,6 +77,10 @@ export function CreateTeacherModal({
     setError(null);
     if (role === "PROF_PRINCIPAL" && principalClassIds.length === 0) {
       setError(t("errorPrincipalClassesRequired"));
+      return;
+    }
+    if (role === "DIRECTEUR" && !directorElevatedPrivilegesConfirmed) {
+      setError(t("errorDirectorConfirmationRequired"));
       return;
     }
     startTransition(async () => {
@@ -94,6 +101,10 @@ export function CreateTeacherModal({
           assignedClassIds:
             role === "PROFESSEUR" || role === "PROF_PRINCIPAL"
               ? assignedClassIds
+              : undefined,
+          directorElevatedPrivilegesConfirmed:
+            role === "DIRECTEUR"
+              ? directorElevatedPrivilegesConfirmed
               : undefined,
         });
       } catch {
@@ -131,9 +142,11 @@ export function CreateTeacherModal({
                               ? t("errorInvalidPrincipalClasses")
                               : err === "INVALID_ASSIGNED_CLASSES"
                                 ? t("errorInvalidAssignedClasses")
-                                : typeof err === "string"
-                                  ? err
-                                  : t("errorGeneric"),
+                                : err === "DIRECTOR_CONFIRMATION_REQUIRED"
+                                  ? t("errorDirectorConfirmationRequired")
+                                  : typeof err === "string"
+                                    ? err
+                                    : t("errorGeneric"),
         );
         return;
       }
@@ -218,36 +231,42 @@ export function CreateTeacherModal({
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="ct-role">{t("role")} *</Label>
-              {viewerRole === "ADMINISTRATEUR" ? (
-                <select
-                  id="ct-role"
-                  value={role}
-                  onChange={(e) => {
-                    const r = e.target.value as UserRole;
-                    setRole(r);
-                    if (r !== "PROF_PRINCIPAL") setPrincipalClassIds([]);
-                  }}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="PROFESSEUR">{t("roleTeacher")}</option>
-                  <option value="PROF_PRINCIPAL">{t("rolePrincipal")}</option>
-                </select>
-              ) : (
-                <select
-                  id="ct-role"
-                  value={role}
-                  onChange={(e) => {
-                    const r = e.target.value as UserRole;
-                    setRole(r);
-                    if (r !== "PROF_PRINCIPAL") setPrincipalClassIds([]);
-                  }}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="PROFESSEUR">{t("roleTeacher")}</option>
-                  <option value="PROF_PRINCIPAL">{t("rolePrincipal")}</option>
-                </select>
-              )}
+              <select
+                id="ct-role"
+                value={role}
+                onChange={(e) => {
+                  const r = e.target.value as UserRole;
+                  setRole(r);
+                  if (r !== "PROF_PRINCIPAL") setPrincipalClassIds([]);
+                  if (r !== "DIRECTEUR") setDirectorElevatedPrivilegesConfirmed(false);
+                }}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="PROFESSEUR">{t("roleTeacher")}</option>
+                <option value="PROF_PRINCIPAL">{t("rolePrincipal")}</option>
+                {viewerRole === "DIRECTEUR" ? (
+                  <option value="DIRECTEUR">{t("roleDirector")}</option>
+                ) : null}
+              </select>
             </div>
+            {viewerRole === "DIRECTEUR" && role === "DIRECTEUR" ? (
+              <div className="sm:col-span-2 space-y-2 rounded-lg border border-amber-500/35 bg-amber-500/[0.06] p-4 dark:bg-amber-500/10">
+                <label className="flex cursor-pointer items-start gap-3 text-sm leading-snug">
+                  <input
+                    id="ct-director-confirm"
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-input text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    checked={directorElevatedPrivilegesConfirmed}
+                    onChange={(e) =>
+                      setDirectorElevatedPrivilegesConfirmed(e.target.checked)
+                    }
+                  />
+                  <span className="font-medium text-foreground">
+                    {t("directorCreateConfirmLabel")}
+                  </span>
+                </label>
+              </div>
+            ) : null}
             {role === "PROF_PRINCIPAL" ? (
               <PrincipalClassPicker
                 id="ct-principal-classes"
@@ -315,7 +334,13 @@ export function CreateTeacherModal({
             >
               {t("cancelDialog")}
             </Button>
-            <Button type="submit" disabled={pending}>
+            <Button
+              type="submit"
+              disabled={
+                pending ||
+                (role === "DIRECTEUR" && !directorElevatedPrivilegesConfirmed)
+              }
+            >
               {pending ? t("creating") : t("createSubmit")}
             </Button>
           </DialogFooter>

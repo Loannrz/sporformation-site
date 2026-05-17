@@ -36,10 +36,11 @@ export function CloudExplorerMyTeacherDocs({
         f.requestLabel,
         f.teacherDisplayName,
         f.description,
+        f.source === "voluntary" ? t("explorerMyTeacherDocVoluntaryBadge") : "",
       ].join(" ");
       return matches(blob, searchQuery);
     });
-  }, [files, searchQuery]);
+  }, [files, searchQuery, t]);
 
   if (filtered.length === 0) {
     return (
@@ -59,7 +60,7 @@ export function CloudExplorerMyTeacherDocs({
       <ul className="space-y-2">
         {filtered.map((f) => (
           <li
-            key={f.requestId}
+            key={`${f.source ?? "onboarding"}-${f.requestId}`}
             className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/80 p-4 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex min-w-0 gap-3">
@@ -67,7 +68,14 @@ export function CloudExplorerMyTeacherDocs({
                 <FileText className="size-5" aria-hidden />
               </div>
               <div className="min-w-0">
-                <p className="font-medium leading-snug">{f.requestLabel}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium leading-snug">{f.requestLabel}</p>
+                  {f.source === "voluntary" ? (
+                    <span className="rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
+                      {t("explorerMyTeacherDocVoluntaryBadge")}
+                    </span>
+                  ) : null}
+                </div>
                 <p className="truncate text-sm text-muted-foreground">{f.title}</p>
                 {showTeacherColumn ? (
                   <p className="text-xs text-muted-foreground">

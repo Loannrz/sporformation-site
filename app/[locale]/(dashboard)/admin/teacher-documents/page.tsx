@@ -1,6 +1,6 @@
 import { getSessionUser } from "@/lib/session-server";
 import { redirectToAccessDenied } from "@/lib/guards";
-import { isStaffAdmin } from "@/lib/roles";
+import { canManageTeacherAccounts } from "@/lib/roles";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { AppLocale } from "@/i18n/routing";
 import {
@@ -8,6 +8,8 @@ import {
   fetchTeacherDocumentTemplates,
   fetchValidatedTeacherDocumentsProfiles,
 } from "@/lib/data/teacher-documents";
+import { fetchVoluntaryCampaignsForAdmin } from "@/lib/data/teacher-voluntary-documents";
+import { fetchAllStaffForAdmin } from "@/lib/data/staff-admin";
 import { TeacherDocumentsAdminPanel } from "@/components/admin/teacher-documents-admin-panel";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +20,7 @@ export default async function AdminTeacherDocumentsPage({
   params: { locale: AppLocale };
 }) {
   const user = await getSessionUser();
-  if (!user || !isStaffAdmin(user)) {
+  if (!user || !canManageTeacherAccounts(user)) {
     redirectToAccessDenied(params.locale);
   }
 
@@ -27,10 +29,12 @@ export default async function AdminTeacherDocumentsPage({
     return <div className="text-sm text-muted-foreground">Service indisponible.</div>;
   }
 
-  const [templates, pendingRaw, validated] = await Promise.all([
+  const [templates, pendingRaw, validated, voluntaryCampaigns, staffList] = await Promise.all([
     fetchTeacherDocumentTemplates(admin),
     fetchPendingTeacherDocumentsProfiles(admin),
     fetchValidatedTeacherDocumentsProfiles(admin),
+    fetchVoluntaryCampaignsForAdmin(admin),
+    fetchAllStaffForAdmin(),
   ]);
 
   const pendingIds = pendingRaw.map((p) => p.id);
@@ -70,6 +74,10 @@ export default async function AdminTeacherDocumentsPage({
       templates={templates}
       pending={pending}
       validated={validated}
+      voluntaryCampaigns={voluntaryCampaigns}
+      staffForVoluntaryPicker={staffList.filter(
+        (s) => s.role === "PROFESSEUR" || s.role === "PROF_PRINCIPAL",
+      )}
     />
   );
 }

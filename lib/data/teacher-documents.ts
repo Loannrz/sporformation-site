@@ -178,18 +178,24 @@ export type TeacherOnboardingCloudFile = CloudFolderFileRow & {
   requestId: string;
   teacherProfileId: string;
   teacherDisplayName: string;
+  /** Parcours arrivée vs demandes hors blocage (campagnes voluntary). */
+  source?: "onboarding" | "voluntary";
 };
 
-export async function fetchTeacherOnboardingFilesForCloud(
+type TeacherCloudPair = {
+  row: CloudFolderFileRow;
+  requestLabel: string;
+  requestId: string;
+  teacherProfileId: string;
+  teacherDisplayName: string;
+  source: "onboarding" | "voluntary";
+};
+
+async function fetchOnboardingTeacherCloudPairs(
+  admin: SupabaseClient,
   viewer: SessionUser,
-): Promise<TeacherOnboardingCloudFile[]> {
-  if (viewer.role === "ELEVE") return [];
-
-  const admin = createAdminSupabase();
-  if (!admin) return [];
-
-  const directorScope = isDirector(viewer) || isStaffAdmin(viewer);
-
+  directorScope: boolean,
+): Promise<TeacherCloudPair[]> {
   const { data: rows, error } = await admin
     .from("teacher_document_requests")
     .select("id, label, teacher_profile_id, file_id")
@@ -225,18 +231,19 @@ export async function fetchTeacherOnboardingFilesForCloud(
     ]),
   );
 
-  const pairList: {
-    req: (typeof scoped)[number];
-    row: CloudFolderFileRow;
-  }[] = [];
+  const pairs: TeacherCloudPair[] = [];
 
   for (const r of scoped) {
     const fid = r.file_id as string;
     const f = fileMap.get(fid);
     if (!f) continue;
     const tid = r.teacher_profile_id as string;
-    pairList.push({
-      req: r,
+    pairs.push({
+      source: "onboarding",
+      requestId: r.id as string,
+      requestLabel: r.label as string,
+      teacherProfileId: tid,
+      teacherDisplayName: nameMap.get(tid) ?? "—",
       row: {
         id: fid,
         title: (f.title as string)?.trim() || (r.label as string),
@@ -256,19 +263,123 @@ export async function fetchTeacherOnboardingFilesForCloud(
     });
   }
 
+  return pairs;
+}
+
+async function fetchVoluntaryTeacherCloudPairs(
+  admin: SupabaseClient,
+  viewer: SessionUser,
+  directorScope: boolean,
+): Promise<TeacherCloudPair[]> {
+  const { data: rows, error } = await admin
+    .from("teacher_voluntary_document_recipients")
+    .select(
+      `
+      id,
+      teacher_profile_id,
+      file_id,
+      teacher_voluntary_document_requests!inner ( label )
+    `,
+    )
+    .not("file_id", "is", null);
+
+  if (error || !rows?.length) return [];
+
+  const scoped = directorScope
+    ? rows
+    : rows.filter((r) => r.teacher_profile_id === viewer.id);
+
+  if (!scoped.length) return [];
+
+  const fileIds = scoped
+    .map((r) => r.file_id as string)
+    .filter((x): x is string => Boolean(x));
+  const teacherIds = [
+    ...new Set(
+      scoped.map((r) => r.teacher_profile_id as string).filter(Boolean),
+    ),
+  ];
+
+  const [{ data: fileRows }, { data: profRows }] = await Promise.all([
+    admin.from("files").select("*").in("id", fileIds),
+    admin.from("profiles").select("id, first_name, last_name").in("id", teacherIds),
+  ]);
+
+  const fileMap = new Map((fileRows ?? []).map((f) => [f.id as string, f]));
+  const nameMap = new Map(
+    (profRows ?? []).map((p) => [
+      p.id as string,
+      `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "—",
+    ]),
+  );
+
+  const pairs: TeacherCloudPair[] = [];
+
+  for (const r of scoped) {
+    const fid = r.file_id as string;
+    const f = fileMap.get(fid);
+    if (!f) continue;
+    const tid = r.teacher_profile_id as string;
+    const req = r.teacher_voluntary_document_requests as unknown as {
+      label: string;
+    };
+    pairs.push({
+      source: "voluntary",
+      requestId: r.id as string,
+      requestLabel: req.label,
+      teacherProfileId: tid,
+      teacherDisplayName: nameMap.get(tid) ?? "—",
+      row: {
+        id: fid,
+        title: (f.title as string)?.trim() || req.label,
+        description: (f.description as string) ?? "",
+        mime: (f.mime as string | null) ?? null,
+        createdAt: new Date(f.created_at as string).toISOString(),
+        version: 1,
+        cloudAudience: normalizeCloudDocumentAudience(
+          f.cloud_audience as string,
+        ),
+        classId: (f.class_id as string | null) ?? null,
+        ownerId: (f.owner_id as string | null) ?? null,
+        studentId: (f.student_id as string | null) ?? null,
+        classFolderId: (f.class_folder_id as string | null) ?? null,
+        storagePath: (f.current_path as string) || null,
+      },
+    });
+  }
+
+  return pairs;
+}
+
+export async function fetchTeacherOnboardingFilesForCloud(
+  viewer: SessionUser,
+): Promise<TeacherOnboardingCloudFile[]> {
+  if (viewer.role === "ELEVE") return [];
+
+  const admin = createAdminSupabase();
+  if (!admin) return [];
+
+  const directorScope = isDirector(viewer) || isStaffAdmin(viewer);
+
+  const [onboardingPairs, voluntaryPairs] = await Promise.all([
+    fetchOnboardingTeacherCloudPairs(admin, viewer, directorScope),
+    fetchVoluntaryTeacherCloudPairs(admin, viewer, directorScope),
+  ]);
+
+  const pairList = [...onboardingPairs, ...voluntaryPairs];
   if (!pairList.length) return [];
 
   const withUrls = await attachSignedUrlsToCloudFiles(pairList.map((p) => p.row));
 
   return pairList.map((p, i) => {
     const u = withUrls[i];
-    const tid = p.req.teacher_profile_id as string;
     return {
       ...u,
-      requestLabel: p.req.label as string,
-      requestId: p.req.id as string,
-      teacherProfileId: tid,
-      teacherDisplayName: nameMap.get(tid) ?? "—",
+      requestLabel: p.requestLabel,
+      requestId: p.requestId,
+      teacherProfileId: p.teacherProfileId,
+      teacherDisplayName: p.teacherDisplayName,
+      source: p.source,
     };
   });
 }

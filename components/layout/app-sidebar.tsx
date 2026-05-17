@@ -175,7 +175,7 @@ type Props = {
   notificationCount?: number;
   /** Sanctions actives non consultées dans le hub (personnel habilité). */
   sanctionsReminderCount?: number;
-  /** Demandes formulaire vitrine encore « à traiter » (directeur). */
+  /** Demandes de contact encore « à traiter » (directeur). */
   leadFormsPendingCount?: number;
   /** Dossiers enseignants en attente de validation (direction / admin). */
   teacherDocumentsPendingCount?: number;

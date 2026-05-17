@@ -40,6 +40,13 @@ import {
   seedDefaultTeacherDocumentTemplatesAction,
   upsertTeacherDocumentTemplateAction,
 } from "@/app/actions/teacher-documents";
+import {
+  closeVoluntaryDocumentRequestAction,
+  createVoluntaryDocumentRequestAction,
+} from "@/app/actions/teacher-voluntary-documents";
+import type { StaffAdminRow } from "@/lib/data/staff-admin";
+import type { VoluntaryCampaignAdminRow } from "@/lib/data/teacher-voluntary-documents";
+import { VoluntaryCampaignDocumentsDialog } from "@/components/admin/voluntary-campaign-documents-dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -50,11 +57,14 @@ import {
   FolderOpen,
   Inbox,
   Mail,
+  Megaphone,
   Plus,
   Search,
   ShieldCheck,
   Sparkles,
   UserCircle2,
+  Users,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
 
@@ -134,6 +144,8 @@ type Props = {
   templates: TeacherDocumentTemplateRow[];
   pending: PendingUi[];
   validated: TeacherOnboardingRow[];
+  voluntaryCampaigns: VoluntaryCampaignAdminRow[];
+  staffForVoluntaryPicker: StaffAdminRow[];
 };
 
 export function TeacherDocumentsAdminPanel({
@@ -142,6 +154,8 @@ export function TeacherDocumentsAdminPanel({
   templates: initialTemplates,
   pending,
   validated,
+  voluntaryCampaigns,
+  staffForVoluntaryPicker,
 }: Props) {
   const t = useTranslations("admin.teacherDocuments");
   const router = useRouter();
@@ -159,6 +173,13 @@ export function TeacherDocumentsAdminPanel({
 
   const [confirmApproveId, setConfirmApproveId] = useState<string | null>(null);
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
+
+  const [volLabel, setVolLabel] = useState("");
+  const [volDescription, setVolDescription] = useState("");
+  const [volScopeAll, setVolScopeAll] = useState(true);
+  const [volSelectedIds, setVolSelectedIds] = useState<Set<string>>(() => new Set());
+  const [volPickerQuery, setVolPickerQuery] = useState("");
+  const [volCampaignView, setVolCampaignView] = useState<{ id: string; label: string } | null>(null);
 
   const director = isDirector(viewer);
 
@@ -191,6 +212,15 @@ export function TeacherDocumentsAdminPanel({
       return blob.includes(q);
     });
   }, [initialTemplates, catalogQuery]);
+
+  const filteredStaffVoluntary = useMemo(() => {
+    const q = normalizeQuery(volPickerQuery);
+    if (!q) return staffForVoluntaryPicker;
+    return staffForVoluntaryPicker.filter((s) => {
+      const blob = `${s.firstName} ${s.lastName} ${s.email}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [staffForVoluntaryPicker, volPickerQuery]);
 
   const resetForm = () => {
     setEditId(null);
@@ -252,6 +282,62 @@ export function TeacherDocumentsAdminPanel({
       const res = await seedDefaultTeacherDocumentTemplatesAction(locale);
       if (res.ok) {
         toast.success(res.inserted ? t("seedDone") : t("toastSaved"));
+        router.refresh();
+      } else {
+        toast.error(t("toastError"));
+      }
+    });
+  };
+
+  const toggleVolTeacher = (id: string) => {
+    setVolSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const submitVoluntaryRequest = () => {
+    if (!volLabel.trim()) {
+      toast.error(t("toastError"));
+      return;
+    }
+    if (!volScopeAll && volSelectedIds.size === 0) {
+      toast.error(t("voluntaryNoTeachersSelected"));
+      return;
+    }
+    startTransition(async () => {
+      const res = await createVoluntaryDocumentRequestAction(locale, {
+        label: volLabel.trim(),
+        description: volDescription.trim() || null,
+        scopeKind: volScopeAll ? "all_staff_teachers" : "selected",
+        teacherIds: volScopeAll ? undefined : [...volSelectedIds],
+      });
+      if (res.ok) {
+        toast.success(t("toastSaved"));
+        setVolLabel("");
+        setVolDescription("");
+        setVolScopeAll(true);
+        setVolSelectedIds(new Set());
+        setVolPickerQuery("");
+        router.refresh();
+      } else if (res.error === "NO_RECIPIENTS") {
+        toast.error(t("voluntaryNoRecipients"));
+      } else {
+        toast.error(t("toastError"));
+      }
+    });
+  };
+
+  const closeVoluntaryCampaign = (requestId: string) => {
+    startTransition(async () => {
+      const res = await closeVoluntaryDocumentRequestAction(locale, requestId);
+      if (res.ok) {
+        toast.success(t("toastSaved"));
+        if (volCampaignView?.id === requestId) {
+          setVolCampaignView(null);
+        }
         router.refresh();
       } else {
         toast.error(t("toastError"));
@@ -335,7 +421,7 @@ export function TeacherDocumentsAdminPanel({
       </header>
 
       <Tabs defaultValue="tracking" className="w-full space-y-6">
-        <TabsList className="grid h-auto min-h-12 w-full grid-cols-2 gap-1 rounded-xl border border-border/50 bg-muted/50 p-1.5 backdrop-blur-sm dark:bg-muted/40">
+        <TabsList className="grid h-auto min-h-12 w-full grid-cols-1 gap-1 rounded-xl border border-border/50 bg-muted/50 p-1.5 backdrop-blur-sm dark:bg-muted/40 sm:grid-cols-3">
           <TabsTrigger
             value="tracking"
             className="gap-2 rounded-lg data-[state=active]:border data-[state=active]:border-border/60 data-[state=active]:bg-card data-[state=active]:shadow-md"
@@ -349,6 +435,13 @@ export function TeacherDocumentsAdminPanel({
           >
             <FolderOpen className="h-4 w-4 opacity-80" />
             <span>{t("tabCatalog")}</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="voluntary"
+            className="gap-2 rounded-lg data-[state=active]:border data-[state=active]:border-border/60 data-[state=active]:bg-card data-[state=active]:shadow-md"
+          >
+            <Megaphone className="h-4 w-4 opacity-80" />
+            <span>{t("tabVoluntary")}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -845,7 +938,295 @@ export function TeacherDocumentsAdminPanel({
             </Card>
           </div>
         </TabsContent>
+
+        <TabsContent value="voluntary" className="space-y-6 focus-visible:outline-none">
+          <p className="text-sm text-muted-foreground">{t("voluntaryTabHint")}</p>
+          <div className="grid gap-6 lg:grid-cols-[1fr_minmax(300px,420px)]">
+            <Card className="border-border/70">
+              <CardContent className="space-y-4 p-5 sm:p-6">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t("voluntaryNewRequest")}
+                </h2>
+                <div className="space-y-2">
+                  <Label htmlFor="vol-label">{t("voluntaryLabelField")}</Label>
+                  <Input
+                    id="vol-label"
+                    value={volLabel}
+                    onChange={(e) => setVolLabel(e.target.value)}
+                    disabled={pendingTr}
+                    placeholder={t("voluntaryLabelPlaceholder")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vol-desc">{t("voluntaryDescriptionField")}</Label>
+                  <Input
+                    id="vol-desc"
+                    value={volDescription}
+                    onChange={(e) => setVolDescription(e.target.value)}
+                    disabled={pendingTr}
+                    placeholder={t("voluntaryDescriptionPlaceholder")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <span className="text-sm font-medium">{t("voluntaryScopeTitle")}</span>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={volScopeAll ? "default" : "outline"}
+                      onClick={() => setVolScopeAll(true)}
+                      disabled={pendingTr}
+                    >
+                      {t("voluntaryScopeAll")}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={!volScopeAll ? "default" : "outline"}
+                      onClick={() => setVolScopeAll(false)}
+                      disabled={pendingTr}
+                    >
+                      {t("voluntaryScopeSelected")}
+                    </Button>
+                  </div>
+                </div>
+                {!volScopeAll ? (
+                  <div className="space-y-2">
+                    <Label>{t("voluntaryPickTeachers")}</Label>
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        className="pl-9"
+                        value={volPickerQuery}
+                        onChange={(e) => setVolPickerQuery(e.target.value)}
+                        placeholder={t("voluntarySearchStaff")}
+                        disabled={pendingTr}
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto rounded-lg border border-border/60 p-2 text-sm">
+                      {filteredStaffVoluntary.length === 0 ? (
+                        <p className="p-2 text-muted-foreground">{t("noSearchResults")}</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {filteredStaffVoluntary.map((s) => (
+                            <li key={s.id}>
+                              <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                                <input
+                                  type="checkbox"
+                                  className="size-4 rounded border-input"
+                                  checked={volSelectedIds.has(s.id)}
+                                  onChange={() => toggleVolTeacher(s.id)}
+                                  disabled={pendingTr}
+                                />
+                                <span className="min-w-0">
+                                  {s.firstName} {s.lastName}
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    {s.email}
+                                  </span>
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t("voluntarySelectedCount", { count: volSelectedIds.size })}
+                    </p>
+                  </div>
+                ) : null}
+                <Button
+                  type="button"
+                  onClick={submitVoluntaryRequest}
+                  disabled={pendingTr}
+                  className="gap-2"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  {t("voluntarySubmit")}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="h-fit overflow-hidden rounded-2xl border-border/70 bg-gradient-to-b from-card to-muted/20 shadow-md ring-1 ring-black/[0.04] dark:from-card dark:to-muted/10 dark:ring-white/[0.06] lg:sticky lg:top-24">
+              <CardContent className="p-5 sm:p-6">
+                <div className="mb-4 flex items-center gap-2">
+                  <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                    <Megaphone className="h-4 w-4" aria-hidden />
+                  </div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t("voluntaryCampaignsTitle")}
+                  </h2>
+                </div>
+                {voluntaryCampaigns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t("voluntaryCampaignsEmpty")}</p>
+                ) : (
+                  <ul className="space-y-4">
+                    {voluntaryCampaigns.map((c) => {
+                      const pct =
+                        c.totalRecipients > 0
+                          ? Math.round((c.filledRecipients / c.totalRecipients) * 100)
+                          : 0;
+                      const isComplete =
+                        c.totalRecipients > 0 && c.filledRecipients >= c.totalRecipients;
+                      const hasPartial =
+                        c.totalRecipients > 0 &&
+                        c.filledRecipients > 0 &&
+                        c.filledRecipients < c.totalRecipients;
+
+                      const surfaceRing = isComplete
+                        ? "ring-emerald-500/25 dark:ring-emerald-400/25"
+                        : hasPartial
+                          ? "ring-sky-500/25 dark:ring-sky-400/20"
+                          : "ring-primary/15 dark:ring-primary/20";
+
+                      const haloClass = isComplete
+                        ? "from-emerald-500/[0.14] via-emerald-500/[0.05] to-transparent dark:from-emerald-500/[0.18]"
+                        : hasPartial
+                          ? "from-sky-500/[0.14] via-sky-500/[0.05] to-transparent dark:from-sky-500/[0.18]"
+                          : "from-primary/[0.10] via-primary/[0.04] to-transparent dark:from-primary/[0.14]";
+
+                      const iconShell = isComplete
+                        ? "bg-emerald-500/12 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300"
+                        : hasPartial
+                          ? "bg-sky-500/12 text-sky-700 ring-sky-500/25 dark:text-sky-300"
+                          : "bg-primary/12 text-primary ring-primary/18";
+
+                      const barClass = isComplete
+                        ? "bg-emerald-500 shadow-[0_0_12px_-2px_rgba(16,185,129,0.55)] dark:bg-emerald-400"
+                        : hasPartial
+                          ? "bg-sky-500 shadow-[0_0_12px_-2px_rgba(14,165,233,0.45)] dark:bg-sky-400"
+                          : "bg-primary/75";
+
+                      return (
+                        <li key={c.id}>
+                          <div
+                            className={cn(
+                              "group relative overflow-hidden rounded-2xl border border-border/60 bg-card/95 shadow-sm backdrop-blur-sm transition duration-300",
+                              "ring-1 hover:-translate-y-0.5 hover:shadow-md",
+                              surfaceRing,
+                            )}
+                          >
+                            <div
+                              aria-hidden
+                              className={cn(
+                                "pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b",
+                                haloClass,
+                              )}
+                            />
+                            <div className="relative space-y-4 p-4 sm:p-5">
+                              <div className="flex gap-3.5">
+                                <div
+                                  className={cn(
+                                    "flex size-11 shrink-0 items-center justify-center rounded-xl ring-1",
+                                    iconShell,
+                                  )}
+                                >
+                                  <FileText className="h-[1.125rem] w-[1.125rem]" aria-hidden />
+                                </div>
+                                <div className="min-w-0 flex-1 space-y-2">
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <p className="text-[15px] font-semibold leading-snug tracking-tight text-balance">
+                                      {c.label}
+                                    </p>
+                                    <span
+                                      className={cn(
+                                        "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider tabular-nums",
+                                        isComplete
+                                          ? "border-emerald-500/35 bg-emerald-500/[0.12] text-emerald-800 dark:text-emerald-200"
+                                          : "border-muted-foreground/25 bg-muted/40 text-muted-foreground",
+                                      )}
+                                    >
+                                      {pct}%
+                                    </span>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={cn(
+                                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium",
+                                        c.scope_kind === "all_staff_teachers"
+                                          ? "border-primary/28 bg-primary/[0.08] text-primary"
+                                          : "border-muted-foreground/30 bg-muted/45 text-muted-foreground",
+                                      )}
+                                    >
+                                      {c.scope_kind === "all_staff_teachers" ? (
+                                        <Users className="h-3 w-3 opacity-70" aria-hidden />
+                                      ) : (
+                                        <UserCircle2 className="h-3 w-3 opacity-70" aria-hidden />
+                                      )}
+                                      {c.scope_kind === "all_staff_teachers"
+                                        ? t("voluntaryScopeAllBadge")
+                                        : t("voluntaryScopeSelectedBadge")}
+                                    </span>
+                                    <span className="text-xs tabular-nums text-muted-foreground">
+                                      {t("voluntaryProgress", {
+                                        filled: c.filledRecipients,
+                                        total: c.totalRecipients,
+                                      })}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <div className="flex h-2.5 overflow-hidden rounded-full bg-muted/80 ring-1 ring-border/40">
+                                  <div
+                                    className={cn("h-full rounded-full transition-[width]", barClass)}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2 border-t border-border/50 pt-3.5">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  className="gap-2 shadow-sm"
+                                  onClick={() =>
+                                    setVolCampaignView({
+                                      id: c.id,
+                                      label: c.label,
+                                    })
+                                  }
+                                  disabled={pendingTr}
+                                >
+                                  <Eye className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                                  {t("voluntaryViewDocuments")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-border/80 bg-background/70 hover:bg-muted/60"
+                                  onClick={() => closeVoluntaryCampaign(c.id)}
+                                  disabled={pendingTr}
+                                >
+                                  {t("voluntaryClose")}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
       </Tabs>
+
+      <VoluntaryCampaignDocumentsDialog
+        locale={locale}
+        open={volCampaignView !== null}
+        onOpenChange={(next) => {
+          if (!next) setVolCampaignView(null);
+        }}
+        campaignLabel={volCampaignView?.label ?? ""}
+        requestId={volCampaignView?.id ?? null}
+      />
 
       <AlertDialog
         open={Boolean(confirmApproveId)}

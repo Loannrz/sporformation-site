@@ -13,7 +13,6 @@ import { CloudFolderFileBrowser } from "@/components/cloud/cloud-folder-file-bro
 import { CloudUploadDocumentButton } from "@/components/cloud/cloud-upload-document-button";
 import { getTranslations } from "next-intl/server";
 import type { AppLocale } from "@/i18n/routing";
-import { deriveClassFolderDefaultAudienceTab } from "@/lib/cloud-document-audience";
 import {
   teacherCloudScopedClassIds,
   viewerHasEstablishmentCloudScope,
@@ -22,7 +21,6 @@ import {
   attachSignedUrlsToCloudFiles,
   collectStudentDepositAccessibleFolderIds,
   fetchAdminClassOptions,
-  fetchClassCloudAudienceIndex,
   fetchCloudFolderFiles,
   fetchCloudStudentUploadOptions,
   fetchStudentClassIdForCloud,
@@ -174,15 +172,6 @@ export default async function CloudFolderPage({
     : [];
   const files = await attachSignedUrlsToCloudFiles(filesRaw);
 
-  const audienceIndexRows =
-    parsed?.kind === "class"
-      ? await fetchClassCloudAudienceIndex(parsed.id, user.role)
-      : [];
-
-  const initialAudienceTab = deriveClassFolderDefaultAudienceTab(
-    audienceIndexRows.map((r) => r.cloudAudience),
-  );
-
   const classOptsRaw = await fetchAdminClassOptions();
   const scopedForPicker =
     user.role === "ELEVE" && user.studentClassId
@@ -311,7 +300,6 @@ export default async function CloudFolderPage({
           folderLinkBase={folderLinkBase}
           currentFolderId={currentFolderId}
           classFolderRows={classFolderRows}
-          audienceIndexRows={audienceIndexRows}
           subfolders={subfolders}
           files={files}
           viewerId={user.id}
@@ -321,7 +309,6 @@ export default async function CloudFolderPage({
           studentOptions={studentOptions}
           folderSlug={params.dossier}
           folderOptionsForClass={{ classId: parsed.id, options: folderPick }}
-          initialAudienceTab={initialAudienceTab}
           studentDepositNav={studentDepositNav}
           studentSubfolderCreate={
             allowTeacherInboxSubfolder && currentFolderId

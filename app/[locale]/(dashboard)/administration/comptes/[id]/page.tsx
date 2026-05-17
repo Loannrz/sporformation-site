@@ -10,7 +10,9 @@ import {
   fetchTeacherDocumentRequestsForProfile,
   fetchTeacherDocumentTemplates,
 } from "@/lib/data/teacher-documents";
+import { fetchVoluntaryRecipientsForTeacherProfileAdmin } from "@/lib/data/teacher-voluntary-documents";
 import { TeacherDocumentRequestsEditor } from "@/components/admin/teacher-document-requests-editor";
+import { TeacherVoluntaryDocumentsAccountSection } from "@/components/admin/teacher-voluntary-documents-account-section";
 import { redirectToAccessDenied } from "@/lib/guards";
 import { cn } from "@/lib/utils";
 import { getTranslations } from "next-intl/server";
@@ -94,12 +96,13 @@ export default async function AdminTeacherDetailPage({
   ) {
     const admin = createAdminSupabase();
     if (admin) {
-      const [tpls, reqs] = await Promise.all([
+      const [tpls, reqs, voluntaryRows] = await Promise.all([
         fetchTeacherDocumentTemplates(admin),
         fetchTeacherDocumentRequestsForProfile(admin, staff.id),
+        fetchVoluntaryRecipientsForTeacherProfileAdmin(admin, staff.id),
       ]);
       teacherDocsSection = (
-        <div className="mb-10">
+        <div className="mb-10 space-y-6">
           <TeacherDocumentRequestsEditor
             locale={params.locale}
             teacherProfileId={staff.id}
@@ -114,6 +117,11 @@ export default async function AdminTeacherDetailPage({
             templates={tpls
               .filter((tpl) => tpl.active)
               .map((tpl) => ({ id: tpl.id, label: tpl.label }))}
+          />
+          <TeacherVoluntaryDocumentsAccountSection
+            locale={params.locale}
+            teacherProfileId={staff.id}
+            rows={voluntaryRows}
           />
         </div>
       );

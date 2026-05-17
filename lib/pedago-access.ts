@@ -31,6 +31,7 @@ export const PEDAGO_ADMIN_KEYS: readonly PedagoAdminFlagKey[] = [
   "adminAnnouncements",
   "adminSanctions",
   "adminLeadForms",
+  "adminInscriptionSubmissions",
   "adminHistory",
   "adminStaffDirectory",
 ];
@@ -54,6 +55,7 @@ const ADMIN_DEFAULTS: Record<PedagoAdminFlagKey, boolean> = {
   adminAnnouncements: true,
   adminSanctions: true,
   adminLeadForms: true,
+  adminInscriptionSubmissions: true,
   adminHistory: true,
   adminStaffDirectory: true,
 };
@@ -131,6 +133,12 @@ export function canManageLeadForms(user: SessionUser | null): boolean {
   return user.role === "PEDAGO" && pedagoAdminAllows(user, "adminLeadForms");
 }
 
+export function canManageInscriptionSubmissions(user: SessionUser | null): boolean {
+  if (!user) return false;
+  if (isStaffAdmin(user)) return true;
+  return user.role === "PEDAGO" && pedagoAdminAllows(user, "adminInscriptionSubmissions");
+}
+
 export function canAccessClassesManagementAdmin(user: SessionUser | null): boolean {
   if (!user) return false;
   if (isDirector(user)) return true;
@@ -172,6 +180,7 @@ const HUB_HREF_TO_ADMIN_FLAG: Partial<Record<string, PedagoAdminFlagKey>> = {
   "/sanctions": "adminSanctions",
   "/admin/announcements": "adminAnnouncements",
   "/admin/lead-forms": "adminLeadForms",
+  "/admin/inscription-submissions": "adminInscriptionSubmissions",
   "/admin/history": "adminHistory",
 };
 

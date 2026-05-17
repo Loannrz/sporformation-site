@@ -210,6 +210,7 @@ export function PedagoUsersPanel({ locale, rows: initialRows }: Props) {
       adminAnnouncements: t("admin.adminAnnouncements"),
       adminSanctions: t("admin.adminSanctions"),
       adminLeadForms: t("admin.adminLeadForms"),
+      adminInscriptionSubmissions: t("admin.adminInscriptionSubmissions"),
       adminHistory: t("admin.adminHistory"),
       adminStaffDirectory: t("admin.adminStaffDirectory"),
     };

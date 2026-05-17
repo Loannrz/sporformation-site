@@ -61,22 +61,3 @@ export function fileMatchesCloudClassFolderAudienceTab(
   }
   return audience === "STUDENTS" || audience === "BOTH";
 }
-
-/** Onglet par défaut : priorité vue « cours » si des documents existent pour ce filtre. */
-export function deriveClassFolderDefaultAudienceTab(
-  audiences: CloudDocumentAudience[],
-): CloudClassFolderAudienceTab {
-  if (
-    audiences.some((a) => fileMatchesCloudClassFolderAudienceTab(a, "students"))
-  ) {
-    return "students";
-  }
-  if (
-    audiences.some((a) =>
-      fileMatchesCloudClassFolderAudienceTab(a, "administration"),
-    )
-  ) {
-    return "administration";
-  }
-  return "students";
-}

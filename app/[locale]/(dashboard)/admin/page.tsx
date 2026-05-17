@@ -22,6 +22,7 @@ import {
   History,
   UserRound,
   FileText,
+  ClipboardCheck,
 } from "lucide-react";
 import {
   fetchActiveSanctionsCount,
@@ -135,6 +136,13 @@ export default async function AdminHubPage({
       badgeCount: leadPending,
     },
     {
+      href: "/admin/inscription-submissions",
+      title: t("inscriptionSubmissionsTitle"),
+      desc: t("inscriptionSubmissionsDesc"),
+      Icon: ClipboardCheck,
+      badgeCount: 0,
+    },
+    {
       href: "/admin/history",
       title: t("historyTitle"),
       desc: t("historyDesc"),
@@ -164,8 +172,8 @@ export default async function AdminHubPage({
       pedagoCanAccessHubHref(user as SessionUser, c.href),
     );
   } else if (director) {
-    const beforeHistory = hubCardsBase.slice(0, 7);
-    const historyCard = hubCardsBase[7]!;
+    const beforeHistory = hubCardsBase.slice(0, 8);
+    const historyCard = hubCardsBase[8]!;
     cards = [
       ...beforeHistory,
       pedagoManageCard,

@@ -467,13 +467,23 @@ export async function createTeacherAction(
     assignedClassIds?: string[];
     /** Optionnel — si renseigné (≥ 8 caractères), l’enseignant peut se connecter sans étape « premier mot de passe ». */
     password?: string | null;
+    /** Obligatoire si role === DIRECTEUR — création réservée au directeur connecté. */
+    directorElevatedPrivilegesConfirmed?: boolean;
   },
 ) {
   const gate = await requireTeacherManager();
   if (!gate.ok) return { ok: false as const, error: gate.error };
 
   if (input.role === "DIRECTEUR") {
-    return { ok: false as const, error: "INVALID_ROLE" as const };
+    if (gate.user.role !== "DIRECTEUR") {
+      return { ok: false as const, error: "INVALID_ROLE" as const };
+    }
+    if (!input.directorElevatedPrivilegesConfirmed) {
+      return {
+        ok: false as const,
+        error: "DIRECTOR_CONFIRMATION_REQUIRED" as const,
+      };
+    }
   }
 
   if (input.role === "PEDAGO") {

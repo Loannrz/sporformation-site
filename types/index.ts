@@ -33,6 +33,7 @@ export type PedagoAdminFlagKey =
   | "adminAnnouncements"
   | "adminSanctions"
   | "adminLeadForms"
+  | "adminInscriptionSubmissions"
   | "adminHistory"
   | "adminStaffDirectory";
 

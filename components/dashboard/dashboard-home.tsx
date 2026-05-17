@@ -25,6 +25,10 @@ import { formatCloudUsedVersusQuota } from "@/lib/format-human-binary-bytes";
 import { cn } from "@/lib/utils";
 import type { AppLocale } from "@/i18n/routing";
 import type { Announcement, Sanction, SchoolClass, SessionUser } from "@/types";
+import type {
+  VoluntaryRecipientInvalidatedForUser,
+  VoluntaryRecipientPendingForUser,
+} from "@/lib/data/teacher-voluntary-documents";
 import { format } from "date-fns";
 import { formatDistanceToNow } from "date-fns";
 import { enUS, fr as frLocale } from "date-fns/locale";
@@ -127,6 +131,8 @@ export async function DashboardHome({
   messagingPreview,
   unreadTotal,
   studentClass,
+  voluntaryPending = [],
+  voluntaryInvalidated = [],
 }: {
   locale: AppLocale;
   user: SessionUser;
@@ -137,8 +143,11 @@ export async function DashboardHome({
   messagingPreview: MessagingConversationListItem[];
   unreadTotal: number;
   studentClass: SchoolClass | null;
+  voluntaryPending?: VoluntaryRecipientPendingForUser[];
+  voluntaryInvalidated?: VoluntaryRecipientInvalidatedForUser[];
 }) {
   const t = await getTranslations({ locale, namespace: "dashboard" });
+  const tVol = await getTranslations({ locale, namespace: "voluntaryDocuments" });
   const tAnnounce = await getTranslations({ locale, namespace: "announcements" });
   const tNav = await getTranslations({ locale, namespace: "nav" });
   const dateLocale = locale === "fr" ? frLocale : enUS;
@@ -226,6 +235,33 @@ export async function DashboardHome({
             <p className="max-w-xl text-muted-foreground">
               {t(subtitleKeyForRole(user.role))}
             </p>
+            {voluntaryInvalidated.length > 0 ? (
+              <div className="max-w-2xl rounded-xl border border-rose-500/35 bg-rose-500/[0.1] px-4 py-3 text-sm text-rose-950 shadow-sm dark:border-rose-400/30 dark:bg-rose-950/40 dark:text-rose-50">
+                <p className="font-semibold">{tVol("invalidBannerTitle")}</p>
+                <p className="mt-1 text-rose-900/95 dark:text-rose-100/90">{tVol("invalidBannerIntro")}</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-rose-900/95 dark:text-rose-100/90">
+                  {voluntaryInvalidated.map((it) => (
+                    <li key={it.recipientId}>{it.label}</li>
+                  ))}
+                </ul>
+                <Button variant="secondary" size="sm" className="mt-3" asChild>
+                  <Link href="/documents-volontaires">{tVol("invalidBannerCta")}</Link>
+                </Button>
+              </div>
+            ) : null}
+            {voluntaryPending.length > 0 ? (
+              <div className="max-w-2xl rounded-xl border border-amber-500/35 bg-amber-500/[0.12] px-4 py-3 text-sm text-amber-950 shadow-sm dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-50">
+                <p className="font-semibold">{tVol("bannerTitle")}</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-amber-900/90 dark:text-amber-100/90">
+                  {voluntaryPending.map((it) => (
+                    <li key={it.recipientId}>{it.label}</li>
+                  ))}
+                </ul>
+                <Button variant="secondary" size="sm" className="mt-3" asChild>
+                  <Link href="/documents-volontaires">{tVol("bannerCta")}</Link>
+                </Button>
+              </div>
+            ) : null}
           </header>
           {canMessage && unreadTotal > 0 ? (
             <div className="flex shrink-0 flex-wrap items-center gap-2">

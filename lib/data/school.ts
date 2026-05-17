@@ -1915,58 +1915,6 @@ export async function fetchCloudFolderFiles(
     : mapped;
 }
 
-/** Pour filtrage des sous-dossiers : une ligne par fichier (colonnes minimales). */
-export type ClassCloudAudienceIndexRow = {
-  classFolderId: string | null;
-  cloudAudience: CloudDocumentAudience;
-};
-
-/**
- * Tous les fichiers Cloud d’une classe (sans filtre de sous-dossier),
- * réservés à l’agrég par audience dans la vue classe.
- */
-export async function fetchClassCloudAudienceIndex(
-  classId: string,
-  viewerRole?: UserRole,
-): Promise<ClassCloudAudienceIndexRow[]> {
-  const admin = createAdminSupabase();
-  const supabase = admin ?? (await supabaseOrNull());
-  if (!supabase) return [];
-
-  let selectFields = "class_folder_id,cloud_audience";
-
-  let res = await supabase
-    .from("files")
-    .select(selectFields)
-    .eq("class_id", classId);
-
-  if (res.error && String(res.error.message ?? "").includes("cloud_audience")) {
-    selectFields = selectFields.replace(/,cloud_audience\b/, "");
-    res = await supabase
-      .from("files")
-      .select(selectFields)
-      .eq("class_id", classId);
-  }
-
-  const { data, error } = res;
-  if (error || !data?.length) return [];
-
-  type Row = {
-    class_folder_id?: string | null;
-    cloud_audience?: string | null;
-  };
-
-  const mapped = (data as Row[]).map((r) => ({
-    classFolderId: r.class_folder_id ?? null,
-    cloudAudience: normalizeCloudDocumentAudience(r.cloud_audience),
-  }));
-
-  return viewerRole
-    ? mapped.filter((row) =>
-        viewerSeesCloudDocumentAudience(viewerRole, row.cloudAudience),
-      )
-    : mapped;
-}
 
 /**
  * Tous les fichiers Cloud avec libellés classe et professeur (explorateur racine),

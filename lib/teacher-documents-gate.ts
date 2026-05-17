@@ -4,6 +4,7 @@ import type { SessionUser, TeacherEmploymentStatus, UserRole } from "@/types";
 const BYPASS_PREFIXES = [
   "/login",
   "/documents-a-fournir",
+  "/documents-volontaires",
   "/acces-refuse",
 ] as const;
 
