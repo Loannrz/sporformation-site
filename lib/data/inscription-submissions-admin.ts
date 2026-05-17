@@ -433,14 +433,15 @@ export async function fetchInscriptionSubmissionsDashboardStats(
     if (ids && ids.length > 0) portalIdsFilter = ids;
   }
 
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  const filteredRoot = (): any =>
+  const filteredRoot = () =>
     admin
       .from("inscription_submissions")
       .select("id", { count: "exact", head: true });
 
-  function applySubmissionFilters(base: any): any {
-    let q = base;
+  type HeadCountQuery = ReturnType<typeof filteredRoot>;
+
+  function applySubmissionFilters(base: HeadCountQuery): HeadCountQuery {
+    let q: HeadCountQuery = base;
     if (filters.status && filters.status !== "all") {
       q = q.eq("status", filters.status);
     }
@@ -500,7 +501,6 @@ export async function fetchInscriptionSubmissionsDashboardStats(
     }
     return count ?? 0;
   }
-  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   const [total, backlog, waitingCandidate, accepted] = await Promise.all([
     totalAll(),
